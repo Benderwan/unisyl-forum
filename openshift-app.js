@@ -12,7 +12,7 @@ nconf.overrides((function(){
 
 	var config = {};
 	// Fully Qualified Domain Name
-	var FQDN = "unisyl.tk;
+	var FQDN = process.env.OPENSHIFT_APP_DNS;
 	// Separate FQDN for websockets (socket.io)
 	var WSFQDN = FQDN;
 
