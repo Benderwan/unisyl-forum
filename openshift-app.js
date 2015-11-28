@@ -36,13 +36,7 @@ nconf.overrides((function(){
 		// OpenShift supports websockets but only on ports 8000 and 8443
 		config['socket.io'] = config['socket.io'] || {};
 
-		// Allow to enforce using insecure websockets as a workaround for custom domain without valid SSL certificate
-		if (process.env.OPENSHIFT_NODEBB_WS_USE_INSECURE) {
-			config['socket.io'].address = 'ws://' + WSFQDN + ':8000';
-		}
-		else {
-			config['socket.io'].address = 'wss://' + WSFQDN + ':8443';
-		}
+		config['socket.io'].address = 'ws://unisyl.tk:8000';
 	}
 
 	// Redis
