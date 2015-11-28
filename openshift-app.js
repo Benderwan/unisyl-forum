@@ -12,7 +12,7 @@ nconf.overrides((function(){
 
 	var config = {};
 	// Fully Qualified Domain Name
-	var FQDN = process.env.OPENSHIFT_APP_DNS;
+	var FQDN = process.env.OPENSHIFT_APP_DNS_ALIAS || process.env.OPENSHIFT_APP_DNS || false;
 	// Separate FQDN for websockets (socket.io)
 	var WSFQDN = FQDN;
 
