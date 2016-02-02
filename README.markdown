@@ -12,7 +12,7 @@ First of all, you need an OpenShift account. If you do not have one yet, now is 
 
 Next, install `rhc` application, as described at https://developers.openshift.com/en/managing-client-tools.html.
 
-After that, you should have working `rhc` and `git` available on your system.
+After that, you should have working `rhc` and `git` available on your system. If you had to install `git`, make sure that you configured your identity, as described at: https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup#Your-Identity.
 
 
 ## Installation
@@ -31,19 +31,21 @@ That should create your local copy of your OpenShift repository in a directory c
 
 NodeBB supports both Redis and MongoDB databases. It's up to you to decide which one to use.
 
-To use Redis, run:
+To use local Redis, run:
 
 ```sh
 rhc add-cartridge http://cartreflect-claytondev.rhcloud.com/reflect?github=transformatordesign/openshift-redis-cart -a nodebb
 ```
 
-To use MongoDB, run:
+To use local MongoDB, run:
 
 ```sh
 rhc cartridge add mongodb-2.4 -a nodebb
 ```
 
-Only one of them is needed, there is no point in adding both databases.
+To use third party MongoDB Database-as-a-Service from MongoLab, go to https://marketplace.openshift.com/login, add MongoLab subscription and connect it to the nodebb application (read more about that at https://developers.openshift.com/en/marketplace-mongolab.html).
+
+Only one of them is needed, there is no point in adding more than one database.
 
 ### 3. Add NodeBB repository
 

@@ -5,6 +5,7 @@
  * NodeBB continue it's magic.
  */
 var nconf = require('nconf');
+var url = require('url');
 
 // Set overrides from OpenShift environment
 nconf.overrides((function(){
@@ -75,6 +76,21 @@ nconf.overrides((function(){
 		if (process.env.OPENSHIFT_MONGODB_DB_PASSWORD) {
 			config.mongo.password = process.env.OPENSHIFT_MONGODB_DB_PASSWORD;
 		}
+	}
+
+	// MongoLab
+	if (process.env.MONGOLAB_URI) {
+		config.database = config.database || 'mongo';
+		config.mongo = config.mongo || {};
+		
+		var mongolabURL = url.parse(process.env.MONGOLAB_URI);
+		mongolabURL.auth = mongolabURL.auth.split(':');
+		
+		config.mongo.host = mongolabURL.hostname;
+		config.mongo.port = mongolabURL.port;
+		config.mongo.username = mongolabURL.auth[0];
+		config.mongo.password = mongolabURL.auth[1];
+		config.mongo.database = mongolabURL.pathname.substring(1);
 	}
 
 	return config;
