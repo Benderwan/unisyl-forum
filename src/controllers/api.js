@@ -179,6 +179,36 @@ apiController.getObject = function(req, res, next) {
 apiController.getUserByUID = function(req, res, next) {
 	var uid = req.params.uid ? req.params.uid : 0;
 
+	getUserByUID(uid, res, next);
+};
+
+apiController.getUserByUsername = function(req, res, next) {
+	var username = req.params.username ? req.params.username : 0;
+
+	async.waterfall([
+		function(next) {
+			user.getUidByUsername(username, next);
+		},
+		function(uid, next) {
+			getUserByUID(uid, res, next);
+		}
+	], next);
+};
+
+apiController.getUserByEmail = function(req, res, next) {
+	var email = req.params.email ? req.params.email : 0;
+
+	async.waterfall([
+		function(next) {
+			user.getUidByEmail(email, next);
+		},
+		function(uid, next) {
+			getUserByUID(uid, res, next);
+		}
+	], next);
+};
+
+function getUserByUID(uid, res, next) {
 	async.parallel({
 		userData: async.apply(user.getUserData, uid),
 		settings: async.apply(user.getSettings, uid)
@@ -192,8 +222,7 @@ apiController.getUserByUID = function(req, res, next) {
 
 		res.json(results.userData);
 	});
-};
-
+}
 
 apiController.getModerators = function(req, res, next) {
 	categories.getModerators(req.params.cid, function(err, moderators) {

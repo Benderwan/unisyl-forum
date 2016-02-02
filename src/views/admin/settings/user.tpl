@@ -18,6 +18,12 @@
 				</label>
 			</div>
 
+			<div class="form-group form-inline">
+				<label for="emailConfirmInterval">User may not resend a confirmation email until</label>
+				<input class="form-control" data-field="emailConfirmInterval" type="number" id="emailConfirmInterval" placeholder="Default: 10" value="10" />
+				<label for="emailConfirmInterval">minutes have elapsed</label>
+			</div>
+
 			<div class="form-group">
 				<label>Allow login with</label>
 				<select class="form-control" data-field="allowLoginWith">
@@ -33,8 +39,18 @@
 					<option value="normal">Normal</option>
 					<option value="admin-approval">Admin Approval</option>
 					<option value="invite-only">Invite Only</option>
+					<option value="admin-invite-only">Admin Invite Only</option>
 					<option value="disabled">No registration</option>
 				</select>
+			</div>
+
+			<div class="form-group">
+				<label>Maximum Invitations per User</label>
+				<input type="number" class="form-control" data-field="maximumInvites" placeholder="0">
+				<p class="help-block">
+					0 for no restriction. Admins get infinite invitations<br>
+					Only applicable for "Invite Only"
+				</p>
 			</div>
 		</form>
 	</div>

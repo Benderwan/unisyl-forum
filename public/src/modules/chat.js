@@ -19,11 +19,6 @@ define('chat', ['components', 'taskbar', 'string', 'sounds', 'forum/chats', 'tra
 		});
 
 		socket.on('event:chats.receive', function(data) {
-			if (ajaxify.currentPage.slice(0, 6) === 'chats/') {
-				// User is on the chats page, so do nothing (src/forum/chats.js will handle it)
-				return;
-			}
-
 			var username = data.message.fromUser.username;
 			var isSelf = parseInt(data.message.fromUser.uid, 10) === parseInt(app.user.uid, 10);
 			data.message.self = data.self;
@@ -256,6 +251,17 @@ define('chat', ['components', 'taskbar', 'string', 'sounds', 'forum/chats', 'tra
 						newMessage = false;
 					}
 				});
+
+				chatModal.find('[component="chat/messages"]')
+					.on('click', '[data-action="edit"]', function() {
+						var messageId = $(this).parents('[data-mid]').attr('data-mid');
+						var inputEl = chatModal.find('[component="chat/input"]');
+						Chats.prepEdit(inputEl, messageId);
+					})
+					.on('click', '[data-action="delete"]', function() {
+						var messageId = $(this).parents('[data-mid]').attr('data-mid');
+						Chats.delete(messageId);
+					});
 
 				Chats.addSinceHandler(chatModal.attr('touid'), chatModal.find('.chat-content'), chatModal.find('[data-since]'));
 

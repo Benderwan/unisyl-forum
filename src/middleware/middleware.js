@@ -151,10 +151,10 @@ middleware.isAdmin = function(req, res, next) {
 };
 
 middleware.routeTouchIcon = function(req, res) {
-	if (meta.config['brand:logo'] && validator.isURL(meta.config['brand:logo'])) {
-		return res.redirect(meta.config['brand:logo']);
+	if (meta.config['brand:touchIcon'] && validator.isURL(meta.config['brand:touchIcon'])) {
+		return res.redirect(meta.config['brand:touchIcon']);
 	} else {
-		return res.sendFile(path.join(__dirname, '../../public', meta.config['brand:logo'] || '/logo.png'), {
+		return res.sendFile(path.join(__dirname, '../../public', meta.config['brand:touchIcon'] || '/logo.png'), {
 			maxAge: app.enabled('cache') ? 5184000000 : 0
 		});
 	}
@@ -222,7 +222,7 @@ middleware.privateUploads = function(req, res, next) {
 
 middleware.busyCheck = function(req, res, next) {
 	if (global.env === 'production' && (!meta.config.hasOwnProperty('eventLoopCheckEnabled') || parseInt(meta.config.eventLoopCheckEnabled, 10) === 1) && toobusy()) {
-		res.type('text/html').sendFile(path.join(__dirname, '../../public/503.html'));
+		res.status(503).type('text/html').sendFile(path.join(__dirname, '../../public/503.html'));
 	} else {
 		next();
 	}
