@@ -2,40 +2,40 @@
 
 @font-face {
 	font-family: 'Proxima Nova';
-	src: url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-Regular.eot');
-	src: url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-Regular.eot?#iefix') format('embedded-opentype'),
-		url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-Regular.woff') format('woff'),
-		url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-Regular.ttf')  format('truetype');
+	src: url('http://unisyl.tk/fonts/ProximaNova-Regular.eot');
+	src: url('http://unisyl.tk/fonts/ProximaNova-Regular.eot?#iefix') format('embedded-opentype'),
+		url('http://unisyl.tk/fonts/ProximaNova-Regular.woff') format('woff'),
+		url('http://unisyl.tk/fonts/ProximaNova-Regular.ttf')  format('truetype');
 	font-weight: normal;
 	font-style: normal;
 }
 
 @font-face {
 	font-family: 'Proxima Nova';
-	src: url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-Bold.eot');
-	src: url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-Bold.eot?#iefix') format('embedded-opentype'),
-		url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-Bold.woff') format('woff'),
-		url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-Bold.ttf')  format('truetype');
+	src: url('http://unisyl.tk/fonts/ProximaNova-Bold.eot');
+	src: url('http://unisyl.tk/fonts/ProximaNova-Bold.eot?#iefix') format('embedded-opentype'),
+		url('http://unisyl.tk/fonts/ProximaNova-Bold.woff') format('woff'),
+		url('http://unisyl.tk/fonts/ProximaNova-Bold.ttf')  format('truetype');
 	font-weight: bold;
 	font-style: normal;
 }
 
 @font-face {
 	font-family: 'Proxima Nova';
-	src: url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-RegularIt.eot');
-	src: url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-RegularIt.eot?#iefix') format('embedded-opentype'),
-		url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-RegularIt.woff') format('woff'),
-		url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-RegularIt.ttf')  format('truetype');
+	src: url('http://unisyl.tk/fonts/ProximaNova-RegularIt.eot');
+	src: url('http://unisyl.tk/fonts/ProximaNova-RegularIt.eot?#iefix') format('embedded-opentype'),
+		url('http://unisyl.tk/fonts/ProximaNova-RegularIt.woff') format('woff'),
+		url('http://unisyl.tk/fonts/ProximaNova-RegularIt.ttf')  format('truetype');
 	font-weight: normal;
 	font-style: italic;
 }
 
 @font-face {
 	font-family: 'Proxima Nova';
-	src: url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-BoldIt.eot');
-	src: url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-BoldIt.eot?#iefix') format('embedded-opentype'),
-		url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-BoldIt.woff') format('woff'),
-		url('https://dc843ea840d7d57183c2701427ab03cb15fe6555.googledrive.com/host/0B7nHsoVuca8FfmMxNHA5aVZ6bVJmd3E5VlZjcXNKV3QzakQtSWVRQkplcmo0d0lfUnlvalk/fonts/ProximaNova-BoldIt.ttf')  format('truetype');
+	src: url('http://unisyl.tk/fonts/ProximaNova-BoldIt.eot');
+	src: url('http://unisyl.tk/fonts/ProximaNova-BoldIt.eot?#iefix') format('embedded-opentype'),
+		url('http://unisyl.tk/fonts/ProximaNova-BoldIt.woff') format('woff'),
+		url('http://unisyl.tk/fonts/ProximaNova-BoldIt.ttf')  format('truetype');
 	font-weight: bold;
 	font-style: italic;
 }
