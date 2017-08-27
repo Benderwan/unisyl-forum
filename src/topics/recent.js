@@ -8,6 +8,7 @@ var plugins = require('../plugins');
 var privileges = require('../privileges');
 var user = require('../user');
 var categories = require('../categories');
+var meta = require('../meta');
 
 module.exports = function (Topics) {
 	var terms = {
@@ -65,7 +66,7 @@ module.exports = function (Topics) {
 			function (tids, next) {
 				async.parallel({
 					ignoredCids: function (next) {
-						if (filter === 'watched') {
+						if (filter === 'watched' || parseInt(meta.config.disableRecentCategoryFilter, 10) === 1) {
 							return next(null, []);
 						}
 						user.getIgnoredCategories(uid, next);
@@ -89,7 +90,7 @@ module.exports = function (Topics) {
 		], callback);
 	}
 
-
+	/* not an orphan method, used in widget-essentials */
 	Topics.getLatestTopics = function (uid, start, stop, term, callback) {
 		async.waterfall([
 			function (next) {
@@ -140,19 +141,22 @@ module.exports = function (Topics) {
 
 	Topics.updateRecent = function (tid, timestamp, callback) {
 		callback = callback || function () {};
-		if (plugins.hasListeners('filter:topics.updateRecent')) {
-			plugins.fireHook('filter:topics.updateRecent', { tid: tid, timestamp: timestamp }, function (err, data) {
-				if (err) {
-					return callback(err);
-				}
-				if (data && data.tid && data.timestamp) {
-					db.sortedSetAdd('topics:recent', data.timestamp, data.tid, callback);
+
+		async.waterfall([
+			function (next) {
+				if (plugins.hasListeners('filter:topics.updateRecent')) {
+					plugins.fireHook('filter:topics.updateRecent', { tid: tid, timestamp: timestamp }, next);
 				} else {
-					callback();
+					next(null, { tid: tid, timestamp: timestamp });
 				}
-			});
-		} else {
-			db.sortedSetAdd('topics:recent', timestamp, tid, callback);
-		}
+			},
+			function (data, next) {
+				if (data && data.tid && data.timestamp) {
+					db.sortedSetAdd('topics:recent', data.timestamp, data.tid, next);
+				} else {
+					next();
+				}
+			},
+		], callback);
 	};
 };

@@ -204,7 +204,7 @@ $(document).ready(function () {
 		}
 		ajaxify.loadScript(tpl_url, done);
 
-		ajaxify.widgets.render(tpl_url, url, done);
+		ajaxify.widgets.render(tpl_url, done);
 
 		$(window).trigger('action:ajaxify.contentLoaded', { url: url, tpl: tpl_url });
 
@@ -293,9 +293,19 @@ $(document).ready(function () {
 			headers: {
 				'X-Return-To': app.previousUrl,
 			},
-			success: function (data) {
+			success: function (data, textStatus, xhr) {
 				if (!data) {
 					return;
+				}
+
+				if (xhr.getResponseHeader('X-Redirect')) {
+					return callback({
+						data: {
+							status: 302,
+							responseJSON: data,
+						},
+						textStatus: 'error',
+					});
 				}
 
 				ajaxify.data = data;
@@ -395,6 +405,10 @@ $(document).ready(function () {
 			}
 
 			if (app.flags && app.flags.hasOwnProperty('_unsaved') && app.flags._unsaved === true) {
+				if (e.ctrlKey) {
+					return;
+				}
+
 				translator.translate('[[global:unsaved-changes]]', function (text) {
 					bootbox.confirm(text, function (navigate) {
 						if (navigate) {

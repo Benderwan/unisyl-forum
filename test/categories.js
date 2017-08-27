@@ -20,7 +20,7 @@ describe('Categories', function () {
 
 	before(function (done) {
 		groups.resetCache();
-		async.parallel({
+		async.series({
 			posterUid: function (next) {
 				User.create({ username: 'poster' }, next);
 			},
@@ -640,14 +640,18 @@ describe('Categories', function () {
 				assert.ifError(err);
 				assert.deepEqual(data, {
 					find: false,
-					mods: false,
 					'posts:delete': false,
 					read: false,
 					'topics:reply': false,
 					'topics:read': false,
 					'topics:create': false,
+					'topics:tag': false,
 					'topics:delete': false,
 					'posts:edit': false,
+					'upload:post:file': false,
+					'upload:post:image': false,
+					purge: false,
+					moderate: false,
 				});
 
 				done();
@@ -663,9 +667,14 @@ describe('Categories', function () {
 					'groups:topics:delete': false,
 					'groups:topics:create': true,
 					'groups:topics:reply': true,
+					'groups:topics:tag': true,
 					'groups:posts:delete': true,
 					'groups:read': true,
 					'groups:topics:read': true,
+					'groups:upload:post:file': false,
+					'groups:upload:post:image': true,
+					'groups:purge': false,
+					'groups:moderate': false,
 				});
 
 				done();
@@ -679,10 +688,5 @@ describe('Categories', function () {
 				done();
 			});
 		});
-	});
-
-
-	after(function (done) {
-		db.emptydb(done);
 	});
 });

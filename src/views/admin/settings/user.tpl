@@ -71,6 +71,18 @@
 					<span class="mdl-switch__label"><strong>[[admin/settings/user:user-info-private]]</strong></span>
 				</label>
 			</div>
+			<div class="checkbox">
+				<label class="mdl-switch mdl-js-switch mdl-js-ripple-effect">
+					<input class="mdl-switch__input" type="checkbox" data-field="hideFullname">
+					<span class="mdl-switch__label"><strong>[[admin/settings/user:hide-fullname]]</strong></span>
+				</label>
+			</div>
+			<div class="checkbox">
+				<label class="mdl-switch mdl-js-switch mdl-js-ripple-effect">
+					<input class="mdl-switch__input" type="checkbox" data-field="hideEmail">
+					<span class="mdl-switch__label"><strong>[[admin/settings/user:hide-email]]</strong></span>
+				</label>
+			</div>
 		</form>
 	</div>
 </div>
@@ -153,6 +165,13 @@
 				<input type="number" class="form-control" data-field="maximumInvites" placeholder="0">
 				<p class="help-block">
 					[[admin/settings/user:max-invites-help]]
+				</p>
+			</div>
+			<div class="form-group">
+				<label>[[admin/settings/user:invite-expiration]]</label>
+				<input type="number" class="form-control" data-field="inviteExpiration" placeholder="1">
+				<p class="help-block">
+					[[admin/settings/user:invite-expiration-help]]
 				</p>
 			</div>
 			<div class="form-group">

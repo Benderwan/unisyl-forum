@@ -142,7 +142,7 @@ function getPorts() {
 		process.exit();
 	}
 	var urlObject = url.parse(_url);
-	var port = nconf.get('port') || nconf.get('PORT') || urlObject.port || 4567;
+	var port = nconf.get('port') || urlObject.port || 4567;
 	if (!Array.isArray(port)) {
 		port = [port];
 	}
@@ -223,6 +223,7 @@ fs.open(path.join(__dirname, 'config.json'), 'r', function (err) {
 			require('daemon')({
 				stdout: process.stdout,
 				stderr: process.stderr,
+				cwd: process.cwd(),
 			});
 
 			fs.writeFileSync(pidFilePath, process.pid);

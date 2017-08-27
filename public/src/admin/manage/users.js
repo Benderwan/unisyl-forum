@@ -99,7 +99,7 @@ define('admin/manage/users', ['translator'], function (translator) {
 									data[cur.name] = cur.value;
 									return data;
 								}, {});
-								var until = formData.length ? (Date.now() + (formData.length * 1000 * 60 * 60 * (parseInt(formData.unit, 10) ? 24 : 1))) : 0;
+								var until = formData.length > 0 ? (Date.now() + (formData.length * 1000 * 60 * 60 * (parseInt(formData.unit, 10) ? 24 : 1))) : 0;
 								socket.emit('user.banUsers', { uids: uids, until: until, reason: formData.reason }, done('[[admin/manage/users:alerts.ban-success]]', '.ban', true));
 							},
 						},
@@ -125,15 +125,6 @@ define('admin/manage/users', ['translator'], function (translator) {
 			}
 
 			socket.emit('admin.user.resetLockouts', uids, done('[[admin/manage/users:alerts.lockout-reset-success]]'));
-		});
-
-		$('.reset-flags').on('click', function () {
-			var uids = getSelectedUids();
-			if (!uids.length) {
-				return;
-			}
-
-			socket.emit('admin.user.resetFlags', uids, done('[[admin/manage/users:alerts.flag-reset-success]]'));
 		});
 
 		$('.admin-user').on('click', function () {

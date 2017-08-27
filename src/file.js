@@ -81,7 +81,7 @@ file.allowedExtensions = function () {
 		if (!extension.startsWith('.')) {
 			extension = '.' + extension;
 		}
-		return extension;
+		return extension.toLowerCase();
 	});
 
 	if (allowedExtensions.indexOf('.jpg') !== -1 && allowedExtensions.indexOf('.jpeg') === -1) {
@@ -92,20 +92,37 @@ file.allowedExtensions = function () {
 };
 
 file.exists = function (path, callback) {
-	fs.stat(path, function (err, stat) {
-		callback(!err && stat);
+	fs.stat(path, function (err) {
+		if (err) {
+			if (err.code === 'ENOENT') {
+				return callback(null, false);
+			}
+		}
+		callback(err, true);
 	});
 };
 
 file.existsSync = function (path) {
-	var exists = false;
 	try {
-		exists = fs.statSync(path);
+		fs.statSync(path);
 	} catch (err) {
-		exists = false;
+		if (err.code === 'ENOENT') {
+			return false;
+		}
+		throw err;
 	}
 
-	return !!exists;
+	return true;
+};
+
+file.delete = function (path) {
+	if (path) {
+		fs.unlink(path, function (err) {
+			if (err) {
+				winston.error(err);
+			}
+		});
+	}
 };
 
 file.link = function link(filePath, destPath, cb) {
@@ -171,5 +188,3 @@ file.walk = function (dir, done) {
 		});
 	});
 };
-
-module.exports = file;

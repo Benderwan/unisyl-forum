@@ -13,17 +13,16 @@ var utils = require('../utils');
 
 var apiController = require('../controllers/api');
 
-var SocketPosts = {};
+var SocketPosts = module.exports;
 
 require('./posts/edit')(SocketPosts);
 require('./posts/move')(SocketPosts);
 require('./posts/votes')(SocketPosts);
 require('./posts/bookmarks')(SocketPosts);
 require('./posts/tools')(SocketPosts);
-require('./posts/flag')(SocketPosts);
 
 SocketPosts.reply = function (socket, data, callback) {
-	if (!data || !data.tid || !data.content) {
+	if (!data || !data.tid || (parseInt(meta.config.minimumPostLength, 10) !== 0 && !data.content)) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 
@@ -153,6 +152,3 @@ SocketPosts.getReplies = function (socket, pid, callback) {
 		},
 	], callback);
 };
-
-
-module.exports = SocketPosts;

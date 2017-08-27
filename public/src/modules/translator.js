@@ -292,7 +292,7 @@
 				return Promise.all(argsToTranslate).then(function (translatedArgs) {
 					var out = translated;
 					translatedArgs.forEach(function (arg, i) {
-						var escaped = arg.replace(/%/g, '&#37;').replace(/\\,/g, '&#44;');
+						var escaped = arg.replace(/%(?=\d)/g, '&#37;').replace(/\\,/g, '&#44;');
 						out = out.replace(new RegExp('%' + (i + 1), 'g'), escaped);
 					});
 					return out;
@@ -304,7 +304,7 @@
 		 * Load translation file (or use a cached version), and optionally return the translation of a certain key
 		 * @param {string} namespace - The file name of the translation namespace
 		 * @param {string} [key] - The key of the specific translation to getJSON
-		 * @returns {Promise<Object>|Promise<string>}
+		 * @returns {Promise<{ [key: string]: string }>|Promise<string>}
 		 */
 		Translator.prototype.getTranslation = function getTranslation(namespace, key) {
 			var translation;
@@ -322,6 +322,70 @@
 				});
 			}
 			return translation;
+		};
+
+		/**
+		 * @param {Node} node
+		 * @returns {Node[]}
+		 */
+		function descendantTextNodes(node) {
+			var textNodes = [];
+
+			function helper(node) {
+				if (node.nodeType === 3) {
+					textNodes.push(node);
+				} else {
+					for (var i = 0, c = node.childNodes, l = c.length; i < l; i += 1) {
+						helper(c[i]);
+					}
+				}
+			}
+
+			helper(node);
+			return textNodes;
+		}
+
+		/**
+		 * Recursively translate a DOM element in place
+		 * @param {Element} element - Root element to translate
+		 * @param {string[]} [attributes] - Array of node attributes to translate
+		 * @returns {Promise<void>}
+		 */
+		Translator.prototype.translateInPlace = function translateInPlace(element, attributes) {
+			attributes = attributes || ['placeholder', 'title'];
+
+			var nodes = descendantTextNodes(element);
+			var text = nodes.map(function (node) {
+				return node.nodeValue;
+			}).join('  ||  ');
+
+			var attrNodes = attributes.reduce(function (prev, attr) {
+				var tuples = Array.prototype.map.call(element.querySelectorAll('[' + attr + '*="[["]'), function (el) {
+					return [attr, el];
+				});
+				return prev.concat(tuples);
+			}, []);
+			var attrText = attrNodes.map(function (node) {
+				return node[1].getAttribute(node[0]);
+			}).join('  ||  ');
+
+			return Promise.all([
+				this.translate(text),
+				this.translate(attrText),
+			]).then(function (ref) {
+				var translated = ref[0];
+				var translatedAttrs = ref[1];
+				if (translated) {
+					translated.split('  ||  ').forEach(function (html, i) {
+						$(nodes[i]).replaceWith(html);
+					});
+				}
+				if (translatedAttrs) {
+					translatedAttrs.split('  ||  ').forEach(function (text, i) {
+						attrNodes[i][1].setAttribute(attrNodes[i][0], text);
+					});
+				}
+			});
 		};
 
 		/**
@@ -415,7 +479,7 @@
 		 * @returns {string}
 		 */
 		Translator.escape = function escape(text) {
-			return typeof text === 'string' ? text.replace(/\[/g, '&lsqb;').replace(/\]/g, '&rsqb;') : text;
+			return typeof text === 'string' ? text.replace(/\[\[/g, '&lsqb;&lsqb;').replace(/\]\]/g, '&rsqb;&rsqb;') : text;
 		};
 
 		/**
@@ -516,44 +580,18 @@
 		prepareDOM: function prepareDOM() {
 			// Load the appropriate timeago locale file,
 			// and correct NodeBB language codes to timeago codes, if necessary
-			var languageCode;
-			switch (config.userLang) {
-			case 'en-GB':
-			case 'en-US':
-				languageCode = 'en';
-				break;
+			var languageCode = utils.userLangToTimeagoCode(config.userLang);
 
-			case 'fa-IR':
-				languageCode = 'fa';
-				break;
+			adaptor.timeagoShort = assign({}, jQuery.timeago.settings.strings);
 
-			case 'pt-BR':
-				languageCode = 'pt-br';
-				break;
-
-			case 'nb':
-				languageCode = 'no';
-				break;
-
-			default:
-				languageCode = config.userLang;
-				break;
-			}
-
-			jQuery.getScript(config.relative_path + '/assets/vendor/jquery/timeago/locales/jquery.timeago.' + languageCode + '.js').done(function () {
-				jQuery('.timeago').timeago();
-				adaptor.timeagoShort = assign({}, jQuery.timeago.settings.strings);
-
-				// Retrieve the shorthand timeago values as well
-				jQuery.getScript(config.relative_path + '/assets/vendor/jquery/timeago/locales/jquery.timeago.' + languageCode + '-short.js').done(function () {
-					// Switch back to long-form
-					adaptor.toggleTimeagoShorthand();
-				});
+			jQuery.getScript(config.relative_path + '/assets/vendor/jquery/timeago/locales/jquery.timeago.' + languageCode + '-short.js').done(function () {
+				// Switch back to long-form
+				adaptor.toggleTimeagoShorthand();
 			});
 
 			// Add directional code if necessary
 			adaptor.translate('[[language:dir]]', function (value) {
-				if (value) {
+				if (value && !$('html').attr('data-dir')) {
 					jQuery('html').css('direction', value).attr('data-dir', value);
 				}
 			});

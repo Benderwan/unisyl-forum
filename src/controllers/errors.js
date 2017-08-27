@@ -16,14 +16,14 @@ exports.handleURIErrors = function (err, req, res, next) {
 			res.redirect(nconf.get('relative_path') + cidMatch[0]);
 		} else {
 			winston.warn('[controller] Bad request: ' + req.path);
-			if (res.locals.isAPI) {
+			if (req.path.startsWith(nconf.get('relative_path') + '/api')) {
 				res.status(400).json({
 					error: '[[global:400.title]]',
 				});
 			} else {
 				var middleware = require('../middleware');
 				middleware.buildHeader(req, res, function () {
-					res.render('400', { error: validator.escape(String(err.message)) });
+					res.status(400).render('400', { error: validator.escape(String(err.message)) });
 				});
 			}
 		}
@@ -45,7 +45,7 @@ exports.handleErrors = function (err, req, res, next) { // eslint-disable-line n
 
 	var status = parseInt(err.status, 10);
 	if ((status === 302 || status === 308) && err.path) {
-		return res.locals.isAPI ? res.status(status).json(err.path) : res.redirect(err.path);
+		return res.locals.isAPI ? res.set('X-Redirect', err.path).status(200).json(err.path) : res.redirect(err.path);
 	}
 
 	winston.error(req.path + '\n', err.stack);

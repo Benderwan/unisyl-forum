@@ -158,7 +158,7 @@ Controllers.login = function (req, res, next) {
 				return next(err);
 			}
 			data.username = allowLoginWith === 'email' ? user.email : user.username;
-			data.alternate_logins = [];
+			data.alternate_logins = false;
 			res.render('login', data);
 		});
 	} else {
@@ -291,8 +291,8 @@ Controllers.confirmEmail = function (req, res) {
 Controllers.robots = function (req, res) {
 	res.set('Content-Type', 'text/plain');
 
-	if (meta.config['robots.txt']) {
-		res.send(meta.config['robots.txt']);
+	if (meta.config['robots:txt']) {
+		res.send(meta.config['robots:txt']);
 	} else {
 		res.send('User-agent: *\n' +
 			'Disallow: ' + nconf.get('relative_path') + '/admin/\n' +
@@ -369,8 +369,4 @@ Controllers.termsOfUse = function (req, res, next) {
 	res.render('tos', {
 		termsOfUse: meta.config.termsOfUse,
 	});
-};
-
-Controllers.ping = function (req, res) {
-	res.status(200).send(req.path === '/sping' ? 'healthy' : '200');
 };

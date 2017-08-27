@@ -34,13 +34,11 @@ function mainRoutes(app, middleware, controllers) {
 	setupPageRoute(app, '/search', middleware, [], controllers.search.search);
 	setupPageRoute(app, '/reset/:code?', middleware, [], controllers.reset);
 	setupPageRoute(app, '/tos', middleware, [], controllers.termsOfUse);
-
-	app.get('/ping', controllers.ping);
-	app.get('/sping', controllers.ping);
 }
 
 function modRoutes(app, middleware, controllers) {
-	setupPageRoute(app, '/posts/flags', middleware, [], controllers.mods.flagged);
+	setupPageRoute(app, '/flags', middleware, [], controllers.mods.flags.list);
+	setupPageRoute(app, '/flags/:flagId', middleware, [], controllers.mods.flags.detail);
 }
 
 function globalModRoutes(app, middleware, controllers) {
@@ -115,9 +113,11 @@ module.exports = function (app, middleware, hotswapIds, callback) {
 	pluginRouter.hotswapId = 'plugins';
 	authRouter.hotswapId = 'auth';
 
-	app.all(relativePath + '(/api|/api/*?)', middleware.prepareAPI);
-	app.all(relativePath + '(/api/admin|/api/admin/*?)', middleware.isAdmin);
-	app.all(relativePath + '(/admin|/admin/*?)', ensureLoggedIn.ensureLoggedIn(nconf.get('relative_path') + '/login?local=1'), middleware.applyCSRF, middleware.isAdmin);
+	app.all(relativePath + '(/+api|/+api/*?)', middleware.prepareAPI);
+	app.all(relativePath + '(/+api/admin|/+api/admin/*?)', middleware.isAdmin);
+	app.all(relativePath + '(/+admin|/+admin/*?)', ensureLoggedIn.ensureLoggedIn(nconf.get('relative_path') + '/login?local=1'), middleware.applyCSRF, middleware.isAdmin);
+
+	app.use(middleware.stripLeadingSlashes);
 
 	adminRoutes(router, middleware, controllers);
 	metaRoutes(router, middleware, controllers);
@@ -136,7 +136,7 @@ module.exports = function (app, middleware, hotswapIds, callback) {
 	groupRoutes(router, middleware, controllers);
 
 	for (x = 0; x < routers.length; x += 1) {
-		app.use(relativePath, routers[x]);
+		app.use(relativePath || '/', routers[x]);
 	}
 
 	if (process.env.NODE_ENV === 'development') {
@@ -183,7 +183,7 @@ module.exports = function (app, middleware, hotswapIds, callback) {
 	];
 	app.use(relativePath, function (req, res, next) {
 		if (deprecatedPaths.some(function (path) { return req.path.startsWith(path); })) {
-			winston.warn('[deprecated] Accessing `' + req.path.slice(1) + '` from `/` is deprecated. ' +
+			winston.verbose('[deprecated] Accessing `' + req.path.slice(1) + '` from `/` is deprecated. ' +
 				'Use `/assets' + req.path + '` to access this file.');
 			res.redirect(relativePath + '/assets' + req.path + '?' + meta.config['cache-buster']);
 		} else {
@@ -192,7 +192,7 @@ module.exports = function (app, middleware, hotswapIds, callback) {
 	});
 	// DEPRECATED
 	app.use(relativePath + '/api/language', function (req, res) {
-		winston.warn('[deprecated] Accessing language files from `/api/language` is deprecated. ' +
+		winston.verbose('[deprecated] Accessing language files from `/api/language` is deprecated. ' +
 			'Use `/assets/language' + req.path + '.json` for prefetch paths.');
 		res.redirect(relativePath + '/assets/language' + req.path + '.json?' + meta.config['cache-buster']);
 	});
@@ -207,11 +207,11 @@ module.exports = function (app, middleware, hotswapIds, callback) {
 		async.apply(plugins.reloadRoutes),
 		async.apply(authRoutes.reloadRoutes),
 		async.apply(user.addInterstitials),
+		function (next) {
+			winston.info('Routes added');
+			next();
+		},
 	], function (err) {
-		if (err) {
-			return callback(err);
-		}
-		winston.info('Routes added');
-		callback();
+		callback(err);
 	});
 };

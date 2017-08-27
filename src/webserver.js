@@ -24,6 +24,7 @@ var meta = require('./meta');
 var languages = require('./languages');
 var logger = require('./logger');
 var plugins = require('./plugins');
+var flags = require('./flags');
 var routes = require('./routes');
 var auth = require('./routes/authentication');
 var templates = require('templates.js');
@@ -55,14 +56,17 @@ module.exports.listen = function (callback) {
 	callback = callback || function () { };
 	emailer.registerApp(app);
 
-	setupExpressApp(app);
-
-	helpers.register();
-
-	logger.init(app);
-
 	async.waterfall([
-		initializeNodeBB,
+		function (next) {
+			setupExpressApp(app, next);
+		},
+		function (next) {
+			helpers.register();
+
+			logger.init(app);
+
+			initializeNodeBB(next);
+		},
 		function (next) {
 			winston.info('NodeBB Ready');
 
@@ -103,6 +107,7 @@ function initializeNodeBB(callback) {
 				meta.sounds.addUploads,
 				languages.init,
 				meta.blacklist.load,
+				flags.init,
 			], next);
 		},
 	], function (err) {
@@ -110,7 +115,7 @@ function initializeNodeBB(callback) {
 	});
 }
 
-function setupExpressApp(app) {
+function setupExpressApp(app, callback) {
 	var middleware = require('./middleware');
 
 	var relativePath = nconf.get('relative_path');
@@ -129,6 +134,9 @@ function setupExpressApp(app) {
 	}
 
 	app.use(compression());
+
+	app.get(relativePath + '/ping', ping);
+	app.get(relativePath + '/sping', ping);
 
 	setupFavicon(app);
 
@@ -155,6 +163,12 @@ function setupExpressApp(app) {
 	var toobusy = require('toobusy-js');
 	toobusy.maxLag(parseInt(meta.config.eventLoopLagThreshold, 10) || 100);
 	toobusy.interval(parseInt(meta.config.eventLoopInterval, 10) || 500);
+
+	setupAutoLocale(app, callback);
+}
+
+function ping(req, res) {
+	res.status(200).send(req.path === '/sping' ? 'healthy' : '200');
 }
 
 function setupFavicon(app) {
@@ -186,6 +200,35 @@ function setupCookie() {
 	}
 
 	return cookie;
+}
+
+function setupAutoLocale(app, callback) {
+	languages.listCodes(function (err, codes) {
+		if (err) {
+			return callback(err);
+		}
+
+		var defaultLang = meta.config.defaultLang || 'en-GB';
+
+		var langs = [defaultLang].concat(codes).filter(function (el, i, arr) {
+			return arr.indexOf(el) === i;
+		});
+
+		app.use(function (req, res, next) {
+			if (parseInt(req.uid, 10) > 0 || parseInt(meta.config.autoDetectLang, 10) !== 1) {
+				return next();
+			}
+
+			var lang = req.acceptsLanguages(langs);
+			if (!lang) {
+				return next();
+			}
+			req.query.lang = lang;
+			next();
+		});
+
+		callback();
+	});
 }
 
 function listen(callback) {
@@ -260,11 +303,11 @@ module.exports.testSocket = function (socketPath, callback) {
 	var file = require('./file');
 	async.series([
 		function (next) {
-			file.exists(socketPath, function (exists) {
+			file.exists(socketPath, function (err, exists) {
 				if (exists) {
 					next();
 				} else {
-					callback();
+					callback(err);
 				}
 			});
 		},
