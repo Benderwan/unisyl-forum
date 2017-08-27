@@ -1,8 +1,7 @@
-"use strict";
-/*globals define, app, socket*/
+'use strict';
 
-define('forum/footer', ['notifications', 'chat', 'components', 'translator'], function(Notifications, Chat, components, translator) {
 
+define('forum/footer', ['notifications', 'chat', 'components', 'translator'], function (Notifications, Chat, components, translator) {
 	Notifications.prepareDOM();
 	Chat.prepareDOM();
 	translator.prepareDOM();
@@ -10,13 +9,19 @@ define('forum/footer', ['notifications', 'chat', 'components', 'translator'], fu
 	function updateUnreadTopicCount(count) {
 		$('#unread-count i')
 			.toggleClass('unread-count', count > 0)
-			.attr('data-content', count > 20 ? '20+' : count);
+			.attr('data-content', count > 99 ? '99+' : count);
+	}
+
+	function updateUnreadNewTopicCount(count) {
+		$('#unread-new-count i')
+			.toggleClass('unread-count', count > 0)
+			.attr('data-content', count > 99 ? '99+' : count);
 	}
 
 	function updateUnreadChatCount(count) {
 		components.get('chat/icon')
 			.toggleClass('unread-count', count > 0)
-			.attr('data-content', count > 20 ? '20+' : count);
+			.attr('data-content', count > 99 ? '99+' : count);
 	}
 
 	function initUnreadTopics() {
@@ -43,11 +48,13 @@ define('forum/footer', ['notifications', 'chat', 'components', 'translator'], fu
 			$('[data-tid="' + tid + '"]').addClass('unread');
 		}
 
-		$(window).on('action:ajaxify.end', function(ev, data) {
-			var tid = data.url.match(/^topic\/(\d+)/);
+		$(window).on('action:ajaxify.end', function (ev, data) {
+			if (data.url) {
+				var tid = data.url.match(/^topic\/(\d+)/);
 
-			if (tid && tid[1]) {
-				delete unreadTopics[tid[1]];
+				if (tid && tid[1]) {
+					delete unreadTopics[tid[1]];
+				}
 			}
 		});
 
@@ -55,12 +62,13 @@ define('forum/footer', ['notifications', 'chat', 'components', 'translator'], fu
 	}
 
 	if (app.user.uid) {
-		socket.emit('user.getUnreadCounts', function(err, data) {
+		socket.emit('user.getUnreadCounts', function (err, data) {
 			if (err) {
 				return app.alert(err.message);
 			}
 
 			updateUnreadTopicCount(data.unreadTopicCount);
+			updateUnreadNewTopicCount(data.unreadNewTopicCount);
 			updateUnreadChatCount(data.unreadChatCount);
 			Notifications.updateNotifCount(data.unreadNotificationCount);
 		});

@@ -1,83 +1,59 @@
-"use strict";
+'use strict';
 
-var async = require('async'),
-	validator = require('validator'),
-	nconf = require('nconf'),
+var async = require('async');
+var validator = require('validator');
+var nconf = require('nconf');
 
-	meta = require('../meta'),
-	user = require('../user'),
-	posts = require('../posts'),
-	topics = require('../topics'),
-	categories = require('../categories'),
-	privileges = require('../privileges'),
-	plugins = require('../plugins'),
-	helpers = require('./helpers'),
-	widgets = require('../widgets');
+var meta = require('../meta');
+var user = require('../user');
+var posts = require('../posts');
+var topics = require('../topics');
+var categories = require('../categories');
+var privileges = require('../privileges');
+var plugins = require('../plugins');
+var widgets = require('../widgets');
+var translator = require('../translator');
 
-var apiController = {};
+var apiController = module.exports;
 
-apiController.getConfig = function(req, res, next) {
-	function filterConfig() {
-		plugins.fireHook('filter:config.get', config, function(err, config) {
-			if (res.locals.isAPI) {
-				res.status(200).json(config);
-			} else {
-				next(err, config);
-			}
-		});
-	}
-
+apiController.getConfig = function (req, res, next) {
 	var config = {};
+	config.environment = process.env.NODE_ENV;
 	config.relative_path = nconf.get('relative_path');
-	config.socketioTransports = nconf.get('socket.io:transports') || ['polling', 'websocket'];
-	config.websocketAddress = nconf.get('socket.io:address') || '';
 	config.version = nconf.get('version');
-	config.siteTitle = validator.escape(meta.config.title || meta.config.browserTitle || 'NodeBB');
-	config.browserTitle = validator.escape(meta.config.browserTitle || meta.config.title || 'NodeBB');
+	config.siteTitle = validator.escape(String(meta.config.title || meta.config.browserTitle || 'NodeBB'));
+	config.browserTitle = validator.escape(String(meta.config.browserTitle || meta.config.title || 'NodeBB'));
 	config.titleLayout = (meta.config.titleLayout || '{pageTitle} | {browserTitle}').replace(/{/g, '&#123;').replace(/}/g, '&#125;');
 	config.showSiteTitle = parseInt(meta.config.showSiteTitle, 10) === 1;
-	config.postDelay = meta.config.postDelay;
 	config.minimumTitleLength = meta.config.minimumTitleLength;
 	config.maximumTitleLength = meta.config.maximumTitleLength;
 	config.minimumPostLength = meta.config.minimumPostLength;
 	config.maximumPostLength = meta.config.maximumPostLength;
-	config.topicStaleDays = parseInt(meta.config.topicStaleDays, 10) || 60;
+	config.minimumTagsPerTopic = meta.config.minimumTagsPerTopic || 0;
+	config.maximumTagsPerTopic = meta.config.maximumTagsPerTopic || 5;
+	config.minimumTagLength = meta.config.minimumTagLength || 3;
+	config.maximumTagLength = meta.config.maximumTagLength || 15;
 	config.hasImageUploadPlugin = plugins.hasListeners('filter:uploadImage');
-	config.maximumProfileImageSize = meta.config.maximumProfileImageSize;
-	config.minimumUsernameLength = meta.config.minimumUsernameLength;
-	config.maximumUsernameLength = meta.config.maximumUsernameLength;
-	config.minimumPasswordLength = meta.config.minimumPasswordLength;
-	config.maximumSignatureLength = meta.config.maximumSignatureLength;
-	config.maximumAboutMeLength = meta.config.maximumAboutMeLength || 1000;
 	config.useOutgoingLinksPage = parseInt(meta.config.useOutgoingLinksPage, 10) === 1;
 	config.allowGuestSearching = parseInt(meta.config.allowGuestSearching, 10) === 1;
 	config.allowGuestUserSearching = parseInt(meta.config.allowGuestUserSearching, 10) === 1;
 	config.allowGuestHandles = parseInt(meta.config.allowGuestHandles, 10) === 1;
 	config.allowFileUploads = parseInt(meta.config.allowFileUploads, 10) === 1;
-	config.allowProfileImageUploads = parseInt(meta.config.allowProfileImageUploads) === 1;
 	config.allowTopicsThumbnail = parseInt(meta.config.allowTopicsThumbnail, 10) === 1;
-	config.allowAccountDelete = parseInt(meta.config.allowAccountDelete, 10) === 1;
-	config.allowUserHomePage = parseInt(meta.config.allowUserHomePage, 10) === 1;
-	config.privateUserInfo = parseInt(meta.config.privateUserInfo, 10) === 1;
-	config.privateTagListing = parseInt(meta.config.privateTagListing, 10) === 1;
 	config.usePagination = parseInt(meta.config.usePagination, 10) === 1;
-	config.disableSocialButtons = parseInt(meta.config.disableSocialButtons, 10) === 1;
 	config.disableChat = parseInt(meta.config.disableChat, 10) === 1;
-	config.maximumChatMessageLength = parseInt(meta.config.maximumChatMessageLength, 10) || 1000;
+	config.disableChatMessageEditing = parseInt(meta.config.disableChatMessageEditing, 10) === 1;
+	config.socketioTransports = nconf.get('socket.io:transports') || ['polling', 'websocket'];
+	config.websocketAddress = nconf.get('socket.io:address') || '';
 	config.maxReconnectionAttempts = meta.config.maxReconnectionAttempts || 5;
 	config.reconnectionDelay = meta.config.reconnectionDelay || 1500;
-	config.minimumTagsPerTopic = meta.config.minimumTagsPerTopic || 0;
-	config.maximumTagsPerTopic = meta.config.maximumTagsPerTopic || 5;
-	config.minimumTagLength = meta.config.minimumTagLength || 3;
-	config.maximumTagLength = meta.config.maximumTagLength || 15;
 	config.topicsPerPage = meta.config.topicsPerPage || 20;
 	config.postsPerPage = meta.config.postsPerPage || 20;
 	config.maximumFileSize = meta.config.maximumFileSize;
 	config['theme:id'] = meta.config['theme:id'];
 	config['theme:src'] = meta.config['theme:src'];
-	config.defaultLang = meta.config.defaultLang || 'en_GB';
-	config.userLang = req.query.lang || config.defaultLang;
-	config.environment = process.env.NODE_ENV;
+	config.defaultLang = meta.config.defaultLang || 'en-GB';
+	config.userLang = req.query.lang ? validator.escape(String(req.query.lang)) : config.defaultLang;
 	config.loggedIn = !!req.user;
 	config['cache-buster'] = meta.config['cache-buster'] || '';
 	config.requireEmailConfirmation = parseInt(meta.config.requireEmailConfirmation, 10) === 1;
@@ -85,163 +61,174 @@ apiController.getConfig = function(req, res, next) {
 	config.categoryTopicSort = meta.config.categoryTopicSort || 'newest_to_oldest';
 	config.csrf_token = req.csrfToken();
 	config.searchEnabled = plugins.hasListeners('filter:search.query');
-	config.bootswatchSkin = 'default';
+	config.bootswatchSkin = meta.config.bootswatchSkin || 'noskin';
+	config.defaultBootswatchSkin = meta.config.bootswatchSkin || 'noskin';
 
-	if (!req.user) {
-		return filterConfig();
+	if (config.useOutgoingLinksPage) {
+		config.outgoingLinksWhitelist = meta.config['outgoingLinks:whitelist'];
 	}
 
-	user.getSettings(req.user.uid, function(err, settings) {
+	var timeagoCutoff = meta.config.timeagoCutoff === undefined ? 30 : meta.config.timeagoCutoff;
+	config.timeagoCutoff = timeagoCutoff !== '' ? Math.max(0, parseInt(timeagoCutoff, 10)) : timeagoCutoff;
+
+	config.cookies = {
+		enabled: parseInt(meta.config.cookieConsentEnabled, 10) === 1,
+		message: translator.escape(validator.escape(meta.config.cookieConsentMessage || '[[global:cookies.message]]')).replace(/\\/g, '\\\\'),
+		dismiss: translator.escape(validator.escape(meta.config.cookieConsentDismiss || '[[global:cookies.accept]]')).replace(/\\/g, '\\\\'),
+		link: translator.escape(validator.escape(meta.config.cookieConsentLink || '[[global:cookies.learn_more]]')).replace(/\\/g, '\\\\'),
+	};
+
+	async.waterfall([
+		function (next) {
+			if (!req.user) {
+				return next(null, config);
+			}
+			user.getSettings(req.uid, next);
+		},
+		function (settings, next) {
+			config.usePagination = settings.usePagination;
+			config.topicsPerPage = settings.topicsPerPage;
+			config.postsPerPage = settings.postsPerPage;
+			config.userLang = (req.query.lang ? validator.escape(String(req.query.lang)) : null) || settings.userLang || config.defaultLang;
+			config.openOutgoingLinksInNewTab = settings.openOutgoingLinksInNewTab;
+			config.topicPostSort = settings.topicPostSort || config.topicPostSort;
+			config.categoryTopicSort = settings.categoryTopicSort || config.categoryTopicSort;
+			config.topicSearchEnabled = settings.topicSearchEnabled || false;
+			config.delayImageLoading = settings.delayImageLoading !== undefined ? settings.delayImageLoading : true;
+			config.bootswatchSkin = (settings.bootswatchSkin && settings.bootswatchSkin !== 'default') ? settings.bootswatchSkin : config.bootswatchSkin;
+			plugins.fireHook('filter:config.get', config, next);
+		},
+	], function (err, config) {
 		if (err) {
 			return next(err);
 		}
 
-		config.usePagination = settings.usePagination;
-		config.topicsPerPage = settings.topicsPerPage;
-		config.postsPerPage = settings.postsPerPage;
-		config.notificationSounds = settings.notificationSounds;
-		config.userLang = req.query.lang || settings.userLang || config.defaultLang;
-		config.openOutgoingLinksInNewTab = settings.openOutgoingLinksInNewTab;
-		config.topicPostSort = settings.topicPostSort || config.topicPostSort;
-		config.categoryTopicSort = settings.categoryTopicSort || config.categoryTopicSort;
-		config.topicSearchEnabled = settings.topicSearchEnabled || false;
-		config.bootswatchSkin = settings.bootswatchSkin || config.bootswatchSkin;
-
-		filterConfig();
+		if (res.locals.isAPI) {
+			res.json(config);
+		} else {
+			next(null, config);
+		}
 	});
 };
 
 
-apiController.renderWidgets = function(req, res, next) {
-	var areas = {
-		template: req.query.template,
-		locations: req.query.locations,
-		url: req.query.url
-	};
-
-	if (!areas.template || !areas.locations) {
+apiController.renderWidgets = function (req, res, next) {
+	if (!req.query.template || !req.query.locations) {
 		return res.status(200).json({});
 	}
 
 	widgets.render(req.uid,
 		{
-			template: areas.template,
-			url: areas.url,
-			locations: areas.locations,
+			template: req.query.template,
+			url: req.query.url,
+			locations: req.query.locations,
+			isMobile: req.query.isMobile === 'true',
+			cid: req.query.cid,
 		},
 		req,
 		res,
-		function(err, widgets) {
-		if (err) {
-			return next(err);
+		function (err, widgets) {
+			if (err) {
+				return next(err);
+			}
+			res.status(200).json(widgets);
+		});
+};
+
+apiController.getPostData = function (pid, uid, callback) {
+	async.parallel({
+		privileges: function (next) {
+			privileges.posts.get([pid], uid, next);
+		},
+		post: function (next) {
+			posts.getPostData(pid, next);
+		},
+	}, function (err, results) {
+		if (err || !results.post) {
+			return callback(err);
 		}
-		res.status(200).json(widgets);
+
+		var post = results.post;
+		var privileges = results.privileges[0];
+
+		if (!privileges.read || !privileges['topics:read']) {
+			return callback();
+		}
+
+		post.ip = privileges.isAdminOrMod ? post.ip : undefined;
+		var selfPost = uid && uid === parseInt(post.uid, 10);
+		if (post.deleted && !(privileges.isAdminOrMod || selfPost)) {
+			post.content = '[[topic:post_is_deleted]]';
+		}
+		callback(null, post);
 	});
 };
 
-apiController.getObject = function(req, res, next) {
-	var methods = {
-		post: {
-			canRead: privileges.posts.can,
-			data: posts.getPostData
+apiController.getTopicData = function (tid, uid, callback) {
+	async.parallel({
+		privileges: function (next) {
+			privileges.topics.get(tid, uid, next);
 		},
-		topic: {
-			canRead: privileges.topics.can,
-			data: topics.getTopicData
+		topic: function (next) {
+			topics.getTopicData(tid, next);
 		},
-		category: {
-			canRead: privileges.categories.can,
-			data: categories.getCategoryData
+	}, function (err, results) {
+		if (err || !results.topic) {
+			return callback(err);
 		}
-	};
 
-	if (!methods[req.params.type]) {
+		if (!results.privileges.read || !results.privileges['topics:read'] || (parseInt(results.topic.deleted, 10) && !results.privileges.view_deleted)) {
+			return callback();
+		}
+		callback(null, results.topic);
+	});
+};
+
+apiController.getCategoryData = function (cid, uid, callback) {
+	async.parallel({
+		privileges: function (next) {
+			privileges.categories.get(cid, uid, next);
+		},
+		category: function (next) {
+			categories.getCategoryData(cid, next);
+		},
+	}, function (err, results) {
+		if (err || !results.category) {
+			return callback(err);
+		}
+
+		if (!results.privileges.read) {
+			return callback();
+		}
+		callback(null, results.category);
+	});
+};
+
+
+apiController.getObject = function (req, res, next) {
+	var methods = {
+		post: apiController.getPostData,
+		topic: apiController.getTopicData,
+		category: apiController.getCategoryData,
+	};
+	var method = methods[req.params.type];
+	if (!method) {
 		return next();
 	}
-
-	async.parallel({
-		canRead: async.apply(methods[req.params.type].canRead, 'read', req.params.id, req.uid),
-		data: async.apply(methods[req.params.type].data, req.params.id)
-	}, function(err, results) {
-		if (err || !results.data) {
+	method(req.params.id, req.uid, function (err, result) {
+		if (err || !result) {
 			return next(err);
 		}
 
-		if (!results.canRead) {
-			return helpers.notAllowed(req, res);
-		}
-
-		res.json(results.data);
+		res.json(result);
 	});
 };
 
-
-apiController.getUserByUID = function(req, res, next) {
-	var uid = req.params.uid ? req.params.uid : 0;
-
-	getUserByUID(uid, res, next);
-};
-
-apiController.getUserByUsername = function(req, res, next) {
-	var username = req.params.username ? req.params.username : 0;
-
-	async.waterfall([
-		function(next) {
-			user.getUidByUsername(username, next);
-		},
-		function(uid, next) {
-			getUserByUID(uid, res, next);
-		}
-	], next);
-};
-
-apiController.getUserByEmail = function(req, res, next) {
-	var email = req.params.email ? req.params.email : 0;
-
-	async.waterfall([
-		function(next) {
-			user.getUidByEmail(email, next);
-		},
-		function(uid, next) {
-			getUserByUID(uid, res, next);
-		}
-	], next);
-};
-
-function getUserByUID(uid, res, next) {
-	async.parallel({
-		userData: async.apply(user.getUserData, uid),
-		settings: async.apply(user.getSettings, uid)
-	}, function(err, results) {
-		if (err || !results.userData) {
-			return next(err);
-		}
-
-		results.userData.email = results.settings.showemail ? results.userData.email : undefined;
-		results.userData.fullname = results.settings.showfullname ? results.userData.fullname : undefined;
-
-		res.json(results.userData);
-	});
-}
-
-apiController.getModerators = function(req, res, next) {
-	categories.getModerators(req.params.cid, function(err, moderators) {
+apiController.getModerators = function (req, res, next) {
+	categories.getModerators(req.params.cid, function (err, moderators) {
 		if (err) {
 			return next(err);
 		}
-		res.json({moderators: moderators});
+		res.json({ moderators: moderators });
 	});
 };
-
-
-apiController.getRecentPosts = function(req, res, next) {
-	posts.getRecentPosts(req.uid, 0, 19, req.params.term, function (err, data) {
-		if (err) {
-			return next(err);
-		}
-
-		res.json(data);
-	});
-};
-
-module.exports = apiController;

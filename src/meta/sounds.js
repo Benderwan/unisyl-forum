@@ -1,105 +1,131 @@
 'use strict';
 
-var path = require('path'),
-	fs = require('fs'),
-	nconf = require('nconf'),
-	winston = require('winston'),
-	rimraf = require('rimraf'),
-	mkdirp = require('mkdirp'),
-	async = require('async'),
+var path = require('path');
+var fs = require('fs');
+var rimraf = require('rimraf');
+var mkdirp = require('mkdirp');
+var async = require('async');
 
-	plugins = require('../plugins'),
-	db = require('../database');
+var file = require('../file');
+var plugins = require('../plugins');
+var user = require('../user');
 
-module.exports = function(Meta) {
+var soundsPath = path.join(__dirname, '../../build/public/sounds');
+var uploadsPath = path.join(__dirname, '../../public/uploads/sounds');
 
+module.exports = function (Meta) {
 	Meta.sounds = {};
 
-	Meta.sounds.init = function(callback) {
-		if (nconf.get('isPrimary') === 'true') {
-			var	soundsPath = path.join(__dirname, '../../public/sounds');
-
-			plugins.fireHook('filter:sounds.get', [], function(err, filePaths) {
-				if (err) {
-					winston.error('Could not initialise sound files:' + err.message);
-					return;
+	Meta.sounds.addUploads = function addUploads(callback) {
+		fs.readdir(uploadsPath, function (err, files) {
+			if (err) {
+				if (err.code !== 'ENOENT') {
+					return callback(err);
 				}
 
-				// Clear the sounds directory
-				async.series([
-					function(next) {
-						rimraf(soundsPath, next);
-					},
-					function(next) {
-						mkdirp(soundsPath, next);
-					}
-				], function(err) {
-					if (err) {
-						winston.error('Could not initialise sound files:' + err.message);
-						return;
-					}
+				files = [];
+			}
 
-					// Link paths
-					async.each(filePaths, function(filePath, next) {
-						if (process.platform === 'win32') {
-							fs.link(filePath, path.join(soundsPath, path.basename(filePath)), next);
-						} else {
-							fs.symlink(filePath, path.join(soundsPath, path.basename(filePath)), 'file', next);
-						}
-					}, function(err) {
-						if (!err) {
-							winston.verbose('[sounds] Sounds OK');
-						} else {
-							winston.error('[sounds] Could not initialise sounds: ' + err.message);
-						}
+			var uploadSounds = files.reduce(function (prev, fileName) {
+				var name = fileName.split('.');
+				if (!name.length || !name[0].length) {
+					return prev;
+				}
+				name = name[0];
+				name = name[0].toUpperCase() + name.slice(1);
 
-						if (typeof callback === 'function') {
-							callback();
-						}
-					});
+				prev[name] = fileName;
+				return prev;
+			}, {});
+
+			plugins.soundpacks = plugins.soundpacks.filter(function (pack) {
+				return pack.name !== 'Uploads';
+			});
+			if (Object.keys(uploadSounds).length) {
+				plugins.soundpacks.push({
+					name: 'Uploads',
+					id: 'uploads',
+					dir: uploadsPath,
+					sounds: uploadSounds,
 				});
-			});
-		} else {
-			if (typeof callback === 'function') {
-				callback();
-			}
-		}
-	};
-
-	Meta.sounds.getFiles = function(callback) {
-		// todo: Possibly move these into a bundled module?
-		fs.readdir(path.join(__dirname, '../../public/sounds'), function(err, files) {
-			var	localList = {};
-
-			if (err) {
-				winston.error('Could not get local sound files:' + err.message);
-				console.log(err.stack);
-				return callback(null, []);
 			}
 
-			// Return proper paths
-			files.forEach(function(filename) {
-				localList[filename] = nconf.get('relative_path') + '/sounds/' + filename;
-			});
-
-			callback(null, localList);
+			callback();
 		});
 	};
 
-	Meta.sounds.getMapping = function(callback) {
-		db.getObject('settings:sounds', function(err, sounds) {
-			if (err || !sounds) {
-				// Send default sounds
-				var	defaults = {
-						'notification': 'notification.mp3',
-						'chat-incoming': 'waterdrop-high.mp3',
-						'chat-outgoing': undefined
-					};
-
-				return callback(null, defaults);
+	Meta.sounds.build = function build(callback) {
+		Meta.sounds.addUploads(function (err) {
+			if (err) {
+				return callback(err);
 			}
 
-			callback(null, sounds);
+			var map = plugins.soundpacks.map(function (pack) {
+				return Object.keys(pack.sounds).reduce(function (prev, soundName) {
+					var soundPath = pack.sounds[soundName];
+					prev[pack.name + ' | ' + soundName] = pack.id + '/' + soundPath;
+					return prev;
+				}, {});
+			});
+			map.unshift({});
+			map = Object.assign.apply(null, map);
+
+			async.series([
+				function (next) {
+					rimraf(soundsPath, next);
+				},
+				function (next) {
+					mkdirp(soundsPath, next);
+				},
+				function (cb) {
+					async.parallel([
+						function (next) {
+							fs.writeFile(path.join(soundsPath, 'fileMap.json'), JSON.stringify(map), next);
+						},
+						function (next) {
+							async.each(plugins.soundpacks, function (pack, next) {
+								file.linkDirs(pack.dir, path.join(soundsPath, pack.id), next);
+							}, next);
+						},
+					], cb);
+				},
+			], callback);
+		});
+	};
+
+	var keys = ['chat-incoming', 'chat-outgoing', 'notification'];
+
+	Meta.sounds.getUserSoundMap = function getUserSoundMap(uid, callback) {
+		async.parallel({
+			defaultMapping: function (next) {
+				Meta.configs.getFields(keys, next);
+			},
+			userSettings: function (next) {
+				user.getSettings(uid, next);
+			},
+		}, function (err, results) {
+			if (err) {
+				return callback(err);
+			}
+
+			var userSettings = results.userSettings;
+			userSettings = {
+				notification: userSettings.notificationSound,
+				'chat-incoming': userSettings.incomingChatSound,
+				'chat-outgoing': userSettings.outgoingChatSound,
+			};
+			var defaultMapping = results.defaultMapping || {};
+			var soundMapping = {};
+
+			keys.forEach(function (key) {
+				if (userSettings[key] || userSettings[key] === '') {
+					soundMapping[key] = userSettings[key] || '';
+				} else {
+					soundMapping[key] = defaultMapping[key] || '';
+				}
+			});
+
+			callback(null, soundMapping);
 		});
 	};
 };

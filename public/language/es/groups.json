@@ -24,8 +24,10 @@
     "details.has_no_posts": "Los miembros de este grupo no han hecho ninguna publicación.",
     "details.latest_posts": "Últimas Publicaciones",
     "details.private": "Privado",
+    "details.disableJoinRequests": "Desactivar las peticiones de unión",
     "details.grant": "Conceder/Rescindir Propiedad",
     "details.kick": "Expulsar",
+    "details.kick_confirm": "Are you sure you want to remove this member from the group?",
     "details.owner_options": "Administración De Grupo",
     "details.group_name": "Nombre de Grupo",
     "details.member_count": "Numero de Miembros",
@@ -40,6 +42,7 @@
     "details.hidden": "Oculto",
     "details.hidden_help": "Si está habilitado, este grupo no aparecerá en los listados de grupos, y los usuarios tendrán que ser invitados manualmente",
     "details.delete_group": "Eliminar grupo",
+    "details.private_system_help": "Los grupos privados están desactivados a nivel de sistema, esta opción no cambiará nada.",
     "event.updated": "Los detalles del grupo han sido actualizados",
     "event.deleted": "El grupo \"%1\" ha sido eliminado",
     "membership.accept-invitation": "Aceptar Invitación",
@@ -47,5 +50,9 @@
     "membership.join-group": "Unirse al grupo",
     "membership.leave-group": "Dejar el grupo",
     "membership.reject": "Rechazar",
-    "new-group.group_name": "Nombre de Grupo:"
+    "new-group.group_name": "Nombre de Grupo:",
+    "upload-group-cover": "Cargar foto para el grupo",
+    "bulk-invite-instructions": "Escribe una lista de nombres de usuario separados por comas a invitar a este grupo",
+    "bulk-invite": "Invitación multiple",
+    "remove_group_cover_confirm": "Are you sure you want to remove the cover picture?"
 }

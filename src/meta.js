@@ -1,17 +1,12 @@
-"use strict";
+'use strict';
 
-var async = require('async'),
-	winston = require('winston'),
-	templates = require('templates.js'),
-	os = require('os'),
-	nconf = require('nconf'),
+var async = require('async');
+var winston = require('winston');
+var os = require('os');
+var nconf = require('nconf');
 
-	user = require('./user'),
-	groups = require('./groups'),
-	emitter = require('./emitter'),
-	pubsub = require('./pubsub'),
-	auth = require('./routes/authentication'),
-	utils = require('../public/src/utils');
+var pubsub = require('./pubsub');
+var utils = require('./utils');
 
 (function (Meta) {
 	Meta.reloadRequired = false;
@@ -23,71 +18,48 @@ var async = require('async'),
 	require('./meta/sounds')(Meta);
 	require('./meta/settings')(Meta);
 	require('./meta/logs')(Meta);
+	require('./meta/errors')(Meta);
 	require('./meta/tags')(Meta);
 	require('./meta/dependencies')(Meta);
 	Meta.templates = require('./meta/templates');
+	Meta.blacklist = require('./meta/blacklist');
+	Meta.languages = require('./meta/languages');
 
 	/* Assorted */
-	Meta.userOrGroupExists = function(slug, callback) {
+	Meta.userOrGroupExists = function (slug, callback) {
+		var user = require('./user');
+		var groups = require('./groups');
 		slug = utils.slugify(slug);
 		async.parallel([
 			async.apply(user.existsBySlug, slug),
-			async.apply(groups.existsBySlug, slug)
-		], function(err, results) {
-			callback(err, results ? results.some(function(result) { return result; }) : false);
+			async.apply(groups.existsBySlug, slug),
+		], function (err, results) {
+			callback(err, results ? results.some(function (result) { return result; }) : false);
 		});
 	};
 
-	Meta.reload = function(callback) {
-		pubsub.publish('meta:reload', {hostname: os.hostname()});
-		reload(callback);
+	/**
+	 * Reload deprecated as of v1.1.2+, remove in v2.x
+	 */
+	Meta.reload = function (callback) {
+		restart();
+		callback();
 	};
 
-	pubsub.on('meta:reload', function(data) {
-		if (data.hostname !== os.hostname()) {
-			reload();
-		}
-	});
-
-	function reload(callback) {
-		callback = callback || function() {};
-
-		var	plugins = require('./plugins');
-		async.series([
-			async.apply(plugins.clearRequireCache),
-			async.apply(plugins.reload),
-			async.apply(plugins.reloadRoutes),
-			function(next) {
-				async.parallel([
-					async.apply(Meta.js.minify, false),
-					async.apply(Meta.css.minify),
-					async.apply(Meta.sounds.init),
-					async.apply(Meta.templates.compile),
-					async.apply(auth.reloadRoutes),
-					function(next) {
-						Meta.config['cache-buster'] = utils.generateUUID();
-						templates.flush();
-						next();
-					}
-				], next);
-			}
-		], function(err) {
-			if (!err) {
-				emitter.emit('nodebb:ready');
-			}
-			Meta.reloadRequired = false;
-
-			callback(err);
-		});
-	}
-
-	Meta.restart = function() {
-		pubsub.publish('meta:restart', {hostname: os.hostname()});
+	Meta.restart = function () {
+		pubsub.publish('meta:restart', { hostname: os.hostname() });
 		restart();
 	};
 
+	Meta.getSessionTTLSeconds = function () {
+		var ttlDays = 60 * 60 * 24 * (parseInt(Meta.config.loginDays, 10) || 0);
+		var ttlSeconds = (parseInt(Meta.config.loginSeconds, 10) || 0);
+		var ttl = ttlSeconds || ttlDays || 1209600; // Default to 14 days
+		return ttl;
+	};
+
 	if (nconf.get('isPrimary') === 'true') {
-		pubsub.on('meta:restart', function(data) {
+		pubsub.on('meta:restart', function (data) {
 			if (data.hostname !== os.hostname()) {
 				restart();
 			}
@@ -97,7 +69,7 @@ var async = require('async'),
 	function restart() {
 		if (process.send) {
 			process.send({
-				action: 'restart'
+				action: 'restart',
 			});
 		} else {
 			winston.error('[meta.restart] Could not restart, are you sure NodeBB was started with `./nodebb start`?');

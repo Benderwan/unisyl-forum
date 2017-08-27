@@ -1,23 +1,23 @@
 
 'use strict';
 
-var nconf = require('nconf'),
-	topics = require('../topics'),
-	meta = require('../meta'),
-	helpers = require('./helpers');
+var nconf = require('nconf');
+var topics = require('../topics');
+var meta = require('../meta');
+var helpers = require('./helpers');
 
 var popularController = {};
 
-var anonCache = {}, lastUpdateTime = 0;
+var anonCache = {};
+var lastUpdateTime = 0;
 
 var terms = {
 	daily: 'day',
 	weekly: 'week',
-	monthly: 'month'
+	monthly: 'month',
 };
 
-popularController.get = function(req, res, next) {
-
+popularController.get = function (req, res, next) {
 	var term = terms[req.params.term];
 
 	if (!term && req.params.term) {
@@ -29,7 +29,7 @@ popularController.get = function(req, res, next) {
 		day: '[[recent:day]]',
 		week: '[[recent:week]]',
 		month: '[[recent:month]]',
-		alltime: '[[global:header.popular]]'
+		alltime: '[[global:header.popular]]',
 	};
 
 	if (!req.uid) {
@@ -38,7 +38,7 @@ popularController.get = function(req, res, next) {
 		}
 	}
 
-	topics.getPopular(term, req.uid, meta.config.topicsPerList, function(err, topics) {
+	topics.getPopular(term, req.uid, meta.config.topicsPerList, function (err, topics) {
 		if (err) {
 			return next(err);
 		}
@@ -47,14 +47,15 @@ popularController.get = function(req, res, next) {
 			topics: topics,
 			'feeds:disableRSS': parseInt(meta.config['feeds:disableRSS'], 10) === 1,
 			rssFeedUrl: nconf.get('relative_path') + '/popular/' + (req.params.term || 'daily') + '.rss',
-			title: '[[pages:popular-' + term + ']]'
+			title: '[[pages:popular-' + term + ']]',
+			term: term,
 		};
 
 		if (req.path.startsWith('/api/popular') || req.path.startsWith('/popular')) {
-			var breadcrumbs = [{text: termToBreadcrumb[term]}];
+			var breadcrumbs = [{ text: termToBreadcrumb[term] }];
 
 			if (req.params.term) {
-				breadcrumbs.unshift({text: '[[global:header.popular]]', url: '/popular'});
+				breadcrumbs.unshift({ text: '[[global:header.popular]]', url: '/popular' });
 			}
 
 			data.breadcrumbs = helpers.buildBreadcrumbs(breadcrumbs);

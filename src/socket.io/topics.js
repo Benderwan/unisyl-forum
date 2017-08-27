@@ -1,18 +1,14 @@
-
 'use strict';
 
-var nconf = require('nconf'),
-	async = require('async'),
-	winston = require('winston'),
+var async = require('async');
 
-	topics = require('../topics'),
-	privileges = require('../privileges'),
-	plugins = require('../plugins'),
-	notifications = require('../notifications'),
-	websockets = require('./index'),
-	user = require('../user'),
+var topics = require('../topics');
+var websockets = require('./index');
+var user = require('../user');
+var apiController = require('../controllers/api');
+var socketHelpers = require('./helpers');
 
-	SocketTopics = {};
+var SocketTopics = module.exports;
 
 require('./topics/unread')(SocketTopics);
 require('./topics/move')(SocketTopics);
@@ -20,72 +16,42 @@ require('./topics/tools')(SocketTopics);
 require('./topics/infinitescroll')(SocketTopics);
 require('./topics/tags')(SocketTopics);
 
-SocketTopics.post = function(socket, data, callback) {
+SocketTopics.post = function (socket, data, callback) {
 	if (!data) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 
-	topics.post({
-		uid: socket.uid,
-		handle: data.handle,
-		title: data.title,
-		content: data.content,
-		cid: data.category_id,
-		thumb: data.topic_thumb,
-		tags: data.tags,
-		req: websockets.reqFromSocket(socket)
-	}, function(err, result) {
-		if (err) {
-			return callback(err);
-		}
+	data.uid = socket.uid;
+	data.req = websockets.reqFromSocket(socket);
+	data.timestamp = Date.now();
 
-		if (data.lock) {
-			SocketTopics.doTopicAction('lock', 'event:topic_locked', socket, {tids: [result.topicData.tid], cid: result.topicData.cid});
-		}
+	async.waterfall([
+		function (next) {
+			topics.post(data, next);
+		},
+		function (result, next) {
+			next(null, result.topicData);
 
-		callback(null, result.topicData);
-		socket.emit('event:new_post', {posts: [result.postData]});
-		socket.emit('event:new_topic', result.topicData);
+			socket.emit('event:new_post', { posts: [result.postData] });
+			socket.emit('event:new_topic', result.topicData);
 
-		async.waterfall([
-			function(next) {
-				user.getUidsFromSet('users:online', 0, -1, next);
-			},
-			function(uids, next) {
-				privileges.categories.filterUids('read', result.topicData.cid, uids, next);
-			},
-			function(uids, next) {
-				plugins.fireHook('filter:sockets.sendNewPostToUids', {uidsTo: uids, uidFrom: data.uid, type: 'newTopic'}, next);
-			}
-		], function(err, data) {
-			if (err) {
-				return winston.error(err.stack);
-			}
-
-			var uids = data.uidsTo;
-
-			for(var i=0; i<uids.length; ++i) {
-				if (parseInt(uids[i], 10) !== socket.uid) {
-					websockets.in('uid_' + uids[i]).emit('event:new_post', {posts: [result.postData]});
-					websockets.in('uid_' + uids[i]).emit('event:new_topic', result.topicData);
-				}
-			}
-		});
-	});
+			socketHelpers.notifyNew(socket.uid, 'newTopic', { posts: [result.postData], topic: result.topicData });
+		},
+	], callback);
 };
 
-SocketTopics.postcount = function(socket, tid, callback) {
+SocketTopics.postcount = function (socket, tid, callback) {
 	topics.getTopicField(tid, 'postcount', callback);
 };
 
-SocketTopics.bookmark = function(socket, data, callback) {
+SocketTopics.bookmark = function (socket, data, callback) {
 	if (!socket.uid || !data) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 	topics.setUserBookmark(data.tid, socket.uid, data.index, callback);
 };
 
-SocketTopics.createTopicFromPosts = function(socket, data, callback) {
+SocketTopics.createTopicFromPosts = function (socket, data, callback) {
 	if (!socket.uid) {
 		return callback(new Error('[[error:not-logged-in]]'));
 	}
@@ -94,14 +60,21 @@ SocketTopics.createTopicFromPosts = function(socket, data, callback) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 
-	topics.createTopicFromPosts(socket.uid, data.title, data.pids, callback);
+	topics.createTopicFromPosts(socket.uid, data.title, data.pids, data.fromTid, callback);
 };
 
-SocketTopics.toggleFollow = function(socket, tid, callback) {
-	followCommand(topics.toggleFollow, socket, tid, callback);
+SocketTopics.changeWatching = function (socket, data, callback) {
+	if (!data || !data.tid || !data.type) {
+		return callback(new Error('[[error:invalid-data]]'));
+	}
+	var commands = ['follow', 'unfollow', 'ignore'];
+	if (commands.indexOf(data.type) === -1) {
+		return callback(new Error('[[error:invalid-command]]'));
+	}
+	followCommand(topics[data.type], socket, data.tid, callback);
 };
 
-SocketTopics.follow = function(socket, tid, callback) {
+SocketTopics.follow = function (socket, tid, callback) {
 	followCommand(topics.follow, socket, tid, callback);
 };
 
@@ -113,17 +86,30 @@ function followCommand(method, socket, tid, callback) {
 	method(tid, socket.uid, callback);
 }
 
-SocketTopics.search = function(socket, data, callback) {
-	topics.search(data.tid, data.term, callback);
-};
-
-SocketTopics.isModerator = function(socket, tid, callback) {
-	topics.getTopicField(tid, 'cid', function(err, cid) {
-		if (err) {
-			return callback(err);
-		}
-		user.isModerator(socket.uid, cid, callback);
+SocketTopics.isFollowed = function (socket, tid, callback) {
+	topics.isFollowing([tid], socket.uid, function (err, isFollowing) {
+		callback(err, Array.isArray(isFollowing) && isFollowing.length ? isFollowing[0] : false);
 	});
 };
 
-module.exports = SocketTopics;
+SocketTopics.search = function (socket, data, callback) {
+	if (!data) {
+		return callback(new Error('[[error:invalid-data]]'));
+	}
+	topics.search(data.tid, data.term, callback);
+};
+
+SocketTopics.isModerator = function (socket, tid, callback) {
+	async.waterfall([
+		function (next) {
+			topics.getTopicField(tid, 'cid', next);
+		},
+		function (cid, next) {
+			user.isModerator(socket.uid, cid, next);
+		},
+	], callback);
+};
+
+SocketTopics.getTopic = function (socket, tid, callback) {
+	apiController.getTopicData(tid, socket.uid, callback);
+};

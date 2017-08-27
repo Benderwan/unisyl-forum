@@ -1,45 +1,33 @@
 'use strict';
 
-/* globals define, ajaxify, app, socket, bootbox */
 
 define('forum/account/profile', [
 	'forum/account/header',
 	'forum/infinitescroll',
-	'translator',
-	'components'
-], function(header, infinitescroll, translator) {
-	var Account = {},
-		yourid,
-		theirid,
-		isFollowing;
+	'components',
+], function (header, infinitescroll) {
+	var Account = {};
+	var theirid;
 
-	Account.init = function() {
+	Account.init = function () {
 		header.init();
 
-		yourid = ajaxify.data.yourid;
 		theirid = ajaxify.data.theirid;
-		isFollowing = ajaxify.data.isFollowing;
 
 		app.enterRoom('user/' + theirid);
 
 		processPage();
-		updateButtons();
 
 		socket.removeListener('event:user_status_change', onUserStatusChange);
 		socket.on('event:user_status_change', onUserStatusChange);
 
-		infinitescroll.init(loadMorePosts);
+		if (!config.usePagination) {
+			infinitescroll.init(loadMorePosts);
+		}
 	};
 
 	function processPage() {
 		$('[component="posts"] img:not(.not-responsive), [component="aboutme"] img:not(.not-responsive)').addClass('img-responsive');
-	}
-
-	function updateButtons() {
-		var isSelfOrNotLoggedIn = yourid === theirid || parseInt(yourid, 10) === 0;
-		$('#follow-btn').toggleClass('hide', isFollowing || isSelfOrNotLoggedIn);
-		$('#unfollow-btn').toggleClass('hide', !isFollowing || isSelfOrNotLoggedIn);
-		$('#chat-btn').toggleClass('hide', isSelfOrNotLoggedIn);
 	}
 
 	function onUserStatusChange(data) {
@@ -59,8 +47,8 @@ define('forum/account/profile', [
 
 		infinitescroll.loadMore('posts.loadMoreUserPosts', {
 			after: $('[component="posts"]').attr('data-nextstart'),
-			uid: theirid
-		}, function(data, done) {
+			uid: theirid,
+		}, function (data, done) {
 			if (data.posts && data.posts.length) {
 				onPostsLoaded(data.posts, done);
 			} else {
@@ -72,7 +60,7 @@ define('forum/account/profile', [
 	}
 
 	function onPostsLoaded(posts, callback) {
-		posts = posts.filter(function(post) {
+		posts = posts.filter(function (post) {
 			return !$('[component="posts"] [data-pid=' + post.pid + ']').length;
 		});
 
@@ -80,8 +68,7 @@ define('forum/account/profile', [
 			return callback();
 		}
 
-		app.parseAndTranslate('account/profile', 'posts', {posts: posts}, function(html) {
-
+		app.parseAndTranslate('account/profile', 'posts', { posts: posts }, function (html) {
 			$('[component="posts"]').append(html);
 			html.find('.timeago').timeago();
 

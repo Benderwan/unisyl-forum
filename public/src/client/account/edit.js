@@ -1,24 +1,20 @@
 'use strict';
 
-/* globals define, ajaxify, socket, app, config, templates, bootbox */
 
-define('forum/account/edit', ['forum/account/header', 'uploader', 'translator'], function(header, uploader, translator) {
-	var AccountEdit = {},
-		uploadedPicture = '',
-		selectedImageType = '';
+define('forum/account/edit', ['forum/account/header', 'translator', 'components', 'pictureCropper'], function (header, translator, components, pictureCropper) {
+	var AccountEdit = {};
 
-	AccountEdit.init = function() {
-		uploadedPicture = ajaxify.data.uploadedpicture;
-
+	AccountEdit.init = function () {
 		header.init();
 
 		$('#submitBtn').on('click', updateProfile);
 
-		app.loadJQueryUI(function() {
+		app.loadJQueryUI(function () {
 			$('#inputBirthday').datepicker({
 				changeMonth: true,
 				changeYear: true,
-				yearRange: '1900:+0'
+				yearRange: '1900:-5y',
+				defaultDate: '-13y',
 			});
 		});
 
@@ -36,11 +32,14 @@ define('forum/account/edit', ['forum/account/header', 'uploader', 'translator'],
 			website: $('#inputWebsite').val(),
 			birthday: $('#inputBirthday').val(),
 			location: $('#inputLocation').val(),
+			groupTitle: $('#groupTitle').val(),
 			signature: $('#inputSignature').val(),
-			aboutme: $('#inputAboutMe').val()
+			aboutme: $('#inputAboutMe').val(),
 		};
 
-		socket.emit('user.updateProfile', userData, function(err, data) {
+		$(window).trigger('action:profile.update', userData);
+
+		socket.emit('user.updateProfile', userData, function (err, data) {
 			if (err) {
 				return app.alertError(err.message);
 			}
@@ -58,31 +57,37 @@ define('forum/account/edit', ['forum/account/header', 'uploader', 'translator'],
 	}
 
 	function updateHeader(picture) {
-		require(['components'], function(components) {
-			if (parseInt(ajaxify.data.theirid, 10) !== parseInt(ajaxify.data.yourid, 10)) {
-				return;
-			}
+		if (parseInt(ajaxify.data.theirid, 10) !== parseInt(ajaxify.data.yourid, 10)) {
+			return;
+		}
 
-			components.get('header/userpicture')[picture ? 'show' : 'hide']();
-			components.get('header/usericon')[!picture ? 'show' : 'hide']();
-			if (picture) {
-				components.get('header/userpicture').attr('src', picture);
-			}
-		});
+		components.get('header/userpicture')[picture ? 'show' : 'hide']();
+		components.get('header/usericon')[!picture ? 'show' : 'hide']();
+		if (picture) {
+			components.get('header/userpicture').attr('src', picture);
+		}
 	}
 
 	function handleImageChange() {
-
-		$('#changePictureBtn').on('click', function() {
-			socket.emit('user.getProfilePictures', {uid: ajaxify.data.uid}, function(err, pictures) {
+		$('#changePictureBtn').on('click', function () {
+			socket.emit('user.getProfilePictures', {
+				uid: ajaxify.data.uid,
+			}, function (err, pictures) {
 				if (err) {
 					return app.alertError(err.message);
 				}
+
+				// boolean to signify whether an uploaded picture is present in the pictures list
+				var uploaded = pictures.reduce(function (memo, cur) {
+					return memo || cur.type === 'uploaded';
+				}, false);
+
 				templates.parse('partials/modals/change_picture_modal', {
 					pictures: pictures,
-					uploaded: !!ajaxify.data.uploadedpicture
-				}, function(html) {
-					translator.translate(html, function(html) {
+					uploaded: uploaded,
+					allowProfileImageUploads: ajaxify.data.allowProfileImageUploads,
+				}, function (html) {
+					translator.translate(html, function (html) {
 						var modal = bootbox.dialog({
 							className: 'picture-switcher',
 							title: '[[user:change_picture]]',
@@ -92,22 +97,25 @@ define('forum/account/edit', ['forum/account/header', 'uploader', 'translator'],
 								close: {
 									label: '[[global:close]]',
 									callback: onCloseModal,
-									className: 'btn-link'
+									className: 'btn-link',
 								},
 								update: {
 									label: '[[global:save_changes]]',
-									callback: saveSelection
-								}
-							}
+									callback: saveSelection,
+								},
+							},
 						});
 
 						modal.on('shown.bs.modal', updateImages);
-						modal.on('click', '.list-group-item', selectImageType);
+						modal.on('click', '.list-group-item', function selectImageType() {
+							modal.find('.list-group-item').removeClass('active');
+							$(this).addClass('active');
+						});
+
 						handleImageUpload(modal);
 
 						function updateImages() {
-							var currentPicture = $('#user-current-picture').attr('src'),
-								userIcon = modal.find('.user-icon');
+							var userIcon = modal.find('.user-icon');
 
 							userIcon
 								.css('background-color', ajaxify.data['icon:bgColor'])
@@ -117,28 +125,23 @@ define('forum/account/edit', ['forum/account/header', 'uploader', 'translator'],
 							if (!ajaxify.data.picture) {
 								modal.find('.list-group-item .user-icon').parents('.list-group-item').addClass('active');
 							} else {
-								modal.find('.list-group-item img').each(function() {
+								modal.find('.list-group-item img').each(function () {
 									if (this.getAttribute('src') === ajaxify.data.picture) {
 										$(this).parents('.list-group-item').addClass('active');
 									}
-								})
+								});
 							}
 						}
 
-						function selectImageType() {
-							modal.find('.list-group-item').removeClass('active');
-							$(this).addClass('active');
-						}
-
 						function saveSelection() {
-							var type = modal.find('.list-group-item.active').attr('data-type'),
-								src = modal.find('.list-group-item.active img').attr('src');
-							changeUserPicture(type, function(err) {
+							var type = modal.find('.list-group-item.active').attr('data-type');
+
+							changeUserPicture(type, function (err) {
 								if (err) {
 									return app.alertError(err.message);
 								}
 
-								updateHeader(type === 'default' ? '' : src);
+								updateHeader(type === 'default' ? '' : modal.find('.list-group-item.active img').attr('src'));
 								ajaxify.refresh();
 							});
 						}
@@ -155,9 +158,9 @@ define('forum/account/edit', ['forum/account/header', 'uploader', 'translator'],
 	}
 
 	function handleAccountDelete() {
-		$('#deleteAccountBtn').on('click', function() {
-			translator.translate('[[user:delete_account_confirm]]', function(translated) {
-				var modal = bootbox.confirm(translated + '<p><input type="text" class="form-control" id="confirm-username" /></p>', function(confirm) {
+		$('#deleteAccountBtn').on('click', function () {
+			translator.translate('[[user:delete_account_confirm]]', function (translated) {
+				var modal = bootbox.confirm(translated + '<p><input type="text" class="form-control" id="confirm-username" /></p>', function (confirm) {
 					if (!confirm) {
 						return;
 					}
@@ -165,16 +168,17 @@ define('forum/account/edit', ['forum/account/header', 'uploader', 'translator'],
 					if ($('#confirm-username').val() !== app.user.username) {
 						app.alertError('[[error:invalid-username]]');
 						return false;
-					} else {
-						socket.emit('user.deleteAccount', {}, function(err) {
-							if (err) {
-								app.alertError(err.message);
-							}
-						});
 					}
+					socket.emit('user.deleteAccount', {}, function (err) {
+						if (err) {
+							return app.alertError(err.message);
+						}
+
+						window.location.href = config.relative_path + '/';
+					});
 				});
 
-				modal.on('shown.bs.modal', function() {
+				modal.on('shown.bs.modal', function () {
 					modal.find('input').focus();
 				});
 			});
@@ -184,49 +188,82 @@ define('forum/account/edit', ['forum/account/header', 'uploader', 'translator'],
 
 	function handleImageUpload(modal) {
 		function onUploadComplete(urlOnServer) {
-			urlOnServer = urlOnServer + '?' + new Date().getTime();
+			urlOnServer = config.relative_path + urlOnServer + '?' + Date.now();
 
-			$('#user-current-picture').attr('src', urlOnServer);
 			updateHeader(urlOnServer);
-			uploadedPicture = urlOnServer;
+
+			if (ajaxify.data.picture.length) {
+				$('#user-current-picture, img.avatar').attr('src', urlOnServer);
+				ajaxify.data.uploadedpicture = urlOnServer;
+			} else {
+				ajaxify.refresh(function () {
+					$('#user-current-picture, img.avatar').attr('src', urlOnServer);
+				});
+			}
 		}
 
-		function onRemoveComplete(urlOnServer) {
-			$('#user-current-picture').attr('src', urlOnServer);
-			updateHeader(urlOnServer);
-			uploadedPicture = '';
+		function onRemoveComplete() {
+			if (ajaxify.data.uploadedpicture === ajaxify.data.picture) {
+				ajaxify.refresh();
+				updateHeader();
+			}
 		}
 
-		modal.find('[data-action="upload"]').on('click', function() {
+		modal.find('[data-action="upload"]').on('click', function () {
 			modal.modal('hide');
-			uploader.open(config.relative_path + '/api/user/' + ajaxify.data.userslug + '/uploadpicture', {}, config.maximumProfileImageSize, function(imageUrlOnServer) {
-				onUploadComplete(imageUrlOnServer);
+
+			pictureCropper.show({
+				socketMethod: 'user.uploadCroppedPicture',
+				aspectRatio: 1 / 1,
+				paramName: 'uid',
+				paramValue: ajaxify.data.theirid,
+				fileSize: ajaxify.data.maximumProfileImageSize,
+				allowSkippingCrop: false,
+				restrictImageDimension: true,
+				imageDimension: ajaxify.data.profileImageDimension,
+				title: '[[user:upload_picture]]',
+				description: '[[user:upload_a_picture]]',
+				accept: '.png,.jpg,.bmp',
+			}, function (url) {
+				onUploadComplete(url);
 			});
 
 			return false;
 		});
 
-		modal.find('[data-action="upload-url"]').on('click', function() {
+		modal.find('[data-action="upload-url"]').on('click', function () {
 			modal.modal('hide');
-			templates.parse('partials/modals/upload_picture_from_url_modal', {}, function(html) {
-				translator.translate(html, function(html) {
+			templates.parse('partials/modals/upload_picture_from_url_modal', {}, function (html) {
+				translator.translate(html, function (html) {
 					var uploadModal = $(html);
 					uploadModal.modal('show');
 
-					uploadModal.find('.upload-btn').on('click', function() {
+					uploadModal.find('.upload-btn').on('click', function () {
 						var url = uploadModal.find('#uploadFromUrl').val();
 						if (!url) {
-							return;
+							return false;
 						}
-						socket.emit('user.uploadProfileImageFromUrl', {url: url, uid: ajaxify.data.theirid}, function(err, imageUrlOnServer) {
+						socket.emit('user.uploadProfileImageFromUrl', {
+							uid: ajaxify.data.uid,
+							url: url,
+						}, function (err, url) {
 							if (err) {
-								return app.alertError(err.message);
+								return app.alertError(err);
 							}
-							onUploadComplete(imageUrlOnServer);
 
 							uploadModal.modal('hide');
-						});
 
+							pictureCropper.handleImageCrop({
+								url: url,
+								socketMethod: 'user.uploadCroppedPicture',
+								aspectRatio: '1 / 1',
+								allowSkippingCrop: false,
+								restrictImageDimension: true,
+								imageDimension: ajaxify.data.profileImageDimension,
+								paramName: 'uid',
+								paramValue: ajaxify.data.theirid,
+							}, onUploadComplete);
+						});
 						return false;
 					});
 				});
@@ -235,21 +272,23 @@ define('forum/account/edit', ['forum/account/header', 'uploader', 'translator'],
 			return false;
 		});
 
-		modal.find('[data-action="remove-uploaded"]').on('click', function() {
-			socket.emit('user.removeUploadedPicture', {uid: ajaxify.data.theirid}, function(err, imageUrlOnServer) {
+		modal.find('[data-action="remove-uploaded"]').on('click', function () {
+			socket.emit('user.removeUploadedPicture', {
+				uid: ajaxify.data.theirid,
+			}, function (err) {
 				modal.modal('hide');
 				if (err) {
 					return app.alertError(err.message);
 				}
-				onRemoveComplete(imageUrlOnServer);
+				onRemoveComplete();
 			});
 		});
 	}
 
 	function handleEmailConfirm() {
-		$('#confirm-email').on('click', function() {
+		$('#confirm-email').on('click', function () {
 			var btn = $(this).attr('disabled', true);
-			socket.emit('user.emailConfirm', {}, function(err) {
+			socket.emit('user.emailConfirm', {}, function (err) {
 				btn.removeAttr('disabled');
 				if (err) {
 					return app.alertError(err.message);
@@ -262,7 +301,7 @@ define('forum/account/edit', ['forum/account/header', 'uploader', 'translator'],
 	function changeUserPicture(type, callback) {
 		socket.emit('user.changePicture', {
 			type: type,
-			uid: ajaxify.data.theirid
+			uid: ajaxify.data.theirid,
 		}, callback);
 	}
 
@@ -272,19 +311,19 @@ define('forum/account/edit', ['forum/account/header', 'uploader', 'translator'],
 
 	function updateSignature() {
 		var el = $('#inputSignature');
-		$('#signatureCharCountLeft').html(getCharsLeft(el, config.maximumSignatureLength));
+		$('#signatureCharCountLeft').html(getCharsLeft(el, ajaxify.data.maximumSignatureLength));
 
-		el.on('keyup change', function() {
-			$('#signatureCharCountLeft').html(getCharsLeft(el, config.maximumSignatureLength));
+		el.on('keyup change', function () {
+			$('#signatureCharCountLeft').html(getCharsLeft(el, ajaxify.data.maximumSignatureLength));
 		});
 	}
 
 	function updateAboutMe() {
 		var el = $('#inputAboutMe');
-		$('#aboutMeCharCountLeft').html(getCharsLeft(el, config.maximumAboutMeLength));
+		$('#aboutMeCharCountLeft').html(getCharsLeft(el, ajaxify.data.maximumAboutMeLength));
 
-		el.on('keyup change', function() {
-			$('#aboutMeCharCountLeft').html(getCharsLeft(el, config.maximumAboutMeLength));
+		el.on('keyup change', function () {
+			$('#aboutMeCharCountLeft').html(getCharsLeft(el, ajaxify.data.maximumAboutMeLength));
 		});
 	}
 

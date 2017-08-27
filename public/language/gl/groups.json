@@ -24,8 +24,10 @@
     "details.has_no_posts": "Non hai publicacións neste grupo",
     "details.latest_posts": "Últimas Publicacións",
     "details.private": "Privado",
+    "details.disableJoinRequests": "Desactivar as peticións de unión",
     "details.grant": "Outorgar/Rescindir propiedade",
     "details.kick": "Expulsar",
+    "details.kick_confirm": "Are you sure you want to remove this member from the group?",
     "details.owner_options": "Administración do Grupo",
     "details.group_name": "Nome do Grupo",
     "details.member_count": "Conta de Membros",
@@ -40,6 +42,7 @@
     "details.hidden": "Oculto",
     "details.hidden_help": "Se está habilitado, este grupo non se poderá atopar na listaxe de grupos e os usuarios deberán ser convidados manualmente.",
     "details.delete_group": "Eliminar Grupo",
+    "details.private_system_help": "Os grupos privados están desactivados ao nivel do sistema, esta opción non trocará nada.",
     "event.updated": "Os detalles do grupo foron actualizados",
     "event.deleted": "O grupo \"%1\" foi borrado.",
     "membership.accept-invitation": "Aceptar ",
@@ -47,5 +50,9 @@
     "membership.join-group": "Unirse ao grupo",
     "membership.leave-group": "Marchar do grupo",
     "membership.reject": "Rexeitar",
-    "new-group.group_name": "Nome do grupo:"
+    "new-group.group_name": "Nome do grupo:",
+    "upload-group-cover": "Cargar foto para o grupo",
+    "bulk-invite-instructions": "Escribe unha lista de nomes de usuario a convidar a este grupo separados por comas",
+    "bulk-invite": "Convite múltiple",
+    "remove_group_cover_confirm": "Are you sure you want to remove the cover picture?"
 }

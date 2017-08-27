@@ -1,7 +1,7 @@
-"use strict";
-/*global io, templates, ajaxify, utils, bootbox, overrides, socket, config, Visibility*/
+'use strict';
 
-var app = app || {};
+
+var app = window.app || {};
 
 app.isFocused = true;
 app.currentRoom = null;
@@ -10,102 +10,115 @@ app.cacheBuster = null;
 
 (function () {
 	var showWelcomeMessage = !!utils.params().loggedin;
+	var showBannedMessage = !!utils.params().banned && app.user && app.user.uid === 0;
 
 	templates.setGlobal('config', config);
 
 	app.cacheBuster = config['cache-buster'];
 
-	require(['csrf'], function(csrf) {
-		csrf.set(config.csrf_token);
-	});
-
 	bootbox.setDefaults({
-		locale: config.userLang
+		locale: config.userLang,
 	});
 
-	app.load = function() {
-		$('document').ready(function () {
-			var url = ajaxify.start(window.location.pathname.slice(1) + window.location.search, true);
-			ajaxify.end(url, app.template);
+	app.load = function () {
+		app.loadProgressiveStylesheet();
 
-			handleStatusChange();
+		overrides.overrideTimeago();
 
-			if (config.searchEnabled) {
-				app.handleSearch();
+		var url = ajaxify.start(window.location.pathname.slice(1) + window.location.search + window.location.hash);
+		ajaxify.updateHistory(url, true);
+		ajaxify.parseData();
+		ajaxify.end(url, app.template);
+
+		handleStatusChange();
+
+		if (config.searchEnabled) {
+			app.handleSearch();
+		}
+
+		$('body').on('click', '#new_topic', function () {
+			app.newTopic();
+		});
+
+		require(['components'], function (components) {
+			components.get('user/logout').on('click', app.logout);
+		});
+
+		Visibility.change(function (event, state) {
+			if (state === 'visible') {
+				app.isFocused = true;
+				app.alternatingTitle('');
+			} else if (state === 'hidden') {
+				app.isFocused = false;
 			}
+		});
 
-			handleNewTopic();
+		createHeaderTooltips();
+		app.showEmailConfirmWarning();
+		app.showCookieWarning();
 
-			require(['components'], function(components) {
-				components.get('user/logout').on('click', app.logout);
-			});
+		socket.removeAllListeners('event:nodebb.ready');
+		socket.on('event:nodebb.ready', function (data) {
+			if (!app.cacheBuster || app.cacheBuster !== data['cache-buster']) {
+				app.cacheBuster = data['cache-buster'];
 
-			Visibility.change(function(e, state){
-				if (state === 'visible') {
-					app.isFocused = true;
-					app.alternatingTitle('');
-				} else if (state === 'hidden') {
-					app.isFocused = false;
-				}
-			});
+				app.alert({
+					alert_id: 'forum_updated',
+					title: '[[global:updated.title]]',
+					message: '[[global:updated.message]]',
+					clickfn: function () {
+						window.location.reload();
+					},
+					type: 'warning',
+				});
+			}
+		});
 
-			overrides.overrideBootbox();
-			overrides.overrideTimeago();
-			createHeaderTooltips();
-			app.showEmailConfirmWarning();
+		require(['taskbar', 'helpers', 'forum/pagination'], function (taskbar, helpers, pagination) {
+			taskbar.init();
 
-			socket.removeAllListeners('event:nodebb.ready');
-			socket.on('event:nodebb.ready', function(data) {
-				if (!app.cacheBusters || app.cacheBusters['cache-buster'] !== data['cache-buster']) {
-					app.cacheBusters = data;
+			helpers.register();
 
-					app.alert({
-						alert_id: 'forum_updated',
-						title: '[[global:updated.title]]',
-						message: '[[global:updated.message]]',
-						clickfn: function() {
-							window.location.reload();
-						},
-						type: 'warning'
-					});
-				}
-			});
+			pagination.init();
 
-			require(['taskbar', 'helpers', 'forum/pagination'], function(taskbar, helpers, pagination) {
-				taskbar.init();
-
-				// templates.js helpers
-				helpers.register();
-
-				pagination.init();
-
-				$(window).trigger('action:app.load');
-			});
+			$(window).trigger('action:app.load');
 		});
 	};
 
-	app.logout = function() {
-		require(['csrf'], function(csrf) {
-			$.ajax(config.relative_path + '/logout', {
-				type: 'POST',
-				headers: {
-					'x-csrf-token': csrf.get()
-				},
-				success: function() {
-					window.location.href = config.relative_path + '/';
-				}
-			});
+	app.logout = function () {
+		$(window).trigger('action:app.logout');
+
+		/*
+			Set session refresh flag (otherwise the session check will trip and throw invalid session modal)
+			We know the session is/will be invalid (uid mismatch) because the user is logging out
+		*/
+		app.flags = app.flags || {};
+		app.flags._sessionRefresh = true;
+
+		$.ajax(config.relative_path + '/logout', {
+			type: 'POST',
+			headers: {
+				'x-csrf-token': config.csrf_token,
+			},
+			success: function () {
+				var payload = {
+					next: config.relative_path + '/',
+				};
+
+				$(window).trigger('action:app.loggedOut', payload);
+				window.location.href = payload.next;
+			},
 		});
 	};
 
 	app.alert = function (params) {
-		require(['alerts'], function(alerts) {
+		require(['alerts'], function (alerts) {
 			alerts.alert(params);
 		});
 	};
 
-	app.removeAlert = function(id) {
-		require(['alerts'], function(alerts) {
+	app.removeAlert = function (id) {
+		require(['alerts'], function (alerts) {
 			alerts.remove(id);
 		});
 	};
@@ -115,51 +128,76 @@ app.cacheBuster = null;
 			title: '[[global:alert.success]]',
 			message: message,
 			type: 'success',
-			timeout: timeout ? timeout : 2000
+			timeout: timeout || 5000,
 		});
 	};
 
 	app.alertError = function (message, timeout) {
+		message = message.message || message;
+
+		if (message === '[[error:invalid-session]]') {
+			return app.handleInvalidSession();
+		}
+
 		app.alert({
 			title: '[[global:alert.error]]',
 			message: message,
 			type: 'danger',
-			timeout: timeout ? timeout : 5000
+			timeout: timeout || 10000,
+		});
+	};
+
+	app.handleInvalidSession = function () {
+		if (app.flags && app.flags._sessionRefresh) {
+			return;
+		}
+
+		app.flags = app.flags || {};
+		app.flags._sessionRefresh = true;
+
+		require(['translator'], function (translator) {
+			translator.translate('[[error:invalid-session-text]]', function (translated) {
+				bootbox.alert({
+					title: '[[error:invalid-session]]',
+					message: translated,
+					closeButton: false,
+					callback: function () {
+						window.location.reload();
+					},
+				});
+			});
 		});
 	};
 
 	app.enterRoom = function (room, callback) {
-		callback = callback || function() {};
+		callback = callback || function () {};
 		if (socket && app.user.uid && app.currentRoom !== room) {
+			var previousRoom = app.currentRoom;
+			app.currentRoom = room;
 			socket.emit('meta.rooms.enter', {
 				enter: room,
-				username: app.user.username,
-				userslug: app.user.userslug,
-				picture: app.user.picture,
-				status: app.user.status,
-				'icon:bgColor': app.user['icon:bgColor'],
-				'icon:text': app.user['icon:text']
-			}, function(err) {
+			}, function (err) {
 				if (err) {
+					app.currentRoom = previousRoom;
 					return app.alertError(err.message);
 				}
-				app.currentRoom = room;
+
 				callback();
 			});
 		}
 	};
 
-	app.leaveCurrentRoom = function() {
+	app.leaveCurrentRoom = function () {
 		if (!socket) {
 			return;
 		}
-		socket.emit('meta.rooms.leaveCurrent', function(err) {
+		socket.emit('meta.rooms.leaveCurrent', function (err) {
 			if (err) {
 				return app.alertError(err.message);
 			}
 			app.currentRoom = '';
 		});
-	}
+	};
 
 	function highlightNavigationLink() {
 		var path = window.location.pathname;
@@ -169,30 +207,30 @@ app.cacheBuster = null;
 		}
 	}
 
-	app.createUserTooltips = function(els) {
+	app.createUserTooltips = function (els, placement) {
 		els = els || $('body');
-		els.find('img[title].teaser-pic,img[title].user-img,div.user-icon,span.user-icon').each(function() {
+		els.find('.avatar,img[title].teaser-pic,img[title].user-img,div.user-icon,span.user-icon').each(function () {
 			if (!utils.isTouchDevice()) {
 				$(this).tooltip({
-					placement: 'top',
-					title: $(this).attr('title')
+					placement: placement || $(this).attr('title-placement') || 'top',
+					title: $(this).attr('title'),
 				});
 			}
 		});
 	};
 
-	app.createStatusTooltips = function() {
+	app.createStatusTooltips = function () {
 		if (!utils.isTouchDevice()) {
 			$('body').tooltip({
-				selector:'.fa-circle.status',
-				placement: 'top'
+				selector: '.fa-circle.status',
+				placement: 'top',
 			});
 		}
 	};
 
-	app.replaceSelfLinks = function(selector) {
+	app.replaceSelfLinks = function (selector) {
 		selector = selector || $('a');
-		selector.each(function() {
+		selector.each(function () {
 			var href = $(this).attr('href');
 			if (href && app.user.userslug && href.indexOf('user/_self_') !== -1) {
 				$(this).attr('href', href.replace(/user\/_self_/g, 'user/' + app.user.userslug));
@@ -219,31 +257,60 @@ app.cacheBuster = null;
 		window.scrollTo(0, 0);
 	};
 
-	app.showLoginMessage = function () {
-		function showAlert() {
-			app.alert({
-				type: 'success',
+	app.showMessages = function () {
+		var messages = {
+			login: {
+				format: 'alert',
 				title: '[[global:welcome_back]] ' + app.user.username + '!',
 				message: '[[global:you_have_successfully_logged_in]]',
-				timeout: 5000
-			});
+			},
+			banned: {
+				format: 'modal',
+				title: '[[error:user-banned]]',
+				message: '[[error:user-banned-reason, ' + utils.params().banned + ']]',
+			},
+		};
+
+		function showAlert(type) {
+			switch (messages[type].format) {
+			case 'alert':
+				app.alert({
+					type: 'success',
+					title: messages[type].title,
+					message: messages[type].message,
+					timeout: 5000,
+				});
+				break;
+
+			case 'modal':
+				require(['translator'], function (translator) {
+					translator.translate(messages[type].message, function (translated) {
+						bootbox.alert({
+							title: messages[type].title,
+							message: translated,
+						});
+					});
+				});
+				break;
+			}
 		}
 
 		if (showWelcomeMessage) {
 			showWelcomeMessage = false;
-			if (document.readyState !== 'complete') {
-				$(document).ready(showAlert);
-			} else {
-				showAlert();
-			}
+			$(document).ready(function () {
+				showAlert('login');
+			});
+		}
+
+		if (showBannedMessage) {
+			showBannedMessage = false;
+			$(document).ready(function () {
+				showAlert('banned');
+			});
 		}
 	};
 
-	app.openChat = function (username, touid) {
-		if (username === app.user.username) {
-			return app.alertError('[[error:cant-chat-with-yourself]]');
-		}
-
+	app.openChat = function (roomId, uid) {
 		if (!app.user.uid) {
 			return app.alertError('[[error:not-logged-in]]');
 		}
@@ -255,22 +322,53 @@ app.cacheBuster = null;
 				chat.focusInput(chatModal);
 			}
 
-			if (!chat.modalExists(touid)) {
-				chat.createModal({
-					username: username,
-					touid: touid
-				}, loadAndCenter);
+			if (chat.modalExists(roomId)) {
+				loadAndCenter(chat.getModal(roomId));
 			} else {
-				loadAndCenter(chat.getModal(touid));
+				socket.emit('modules.chats.loadRoom', { roomId: roomId, uid: uid || app.user.uid }, function (err, roomData) {
+					if (err) {
+						return app.alertError(err.message);
+					}
+					roomData.users = roomData.users.filter(function (user) {
+						return user && parseInt(user.uid, 10) !== parseInt(app.user.uid, 10);
+					});
+					roomData.uid = uid || app.user.uid;
+					chat.createModal(roomData, loadAndCenter);
+				});
 			}
 		});
 	};
 
+	app.newChat = function (touid, callback) {
+		callback = callback || function () {};
+		if (!app.user.uid) {
+			return app.alertError('[[error:not-logged-in]]');
+		}
+
+		if (parseInt(touid, 10) === parseInt(app.user.uid, 10)) {
+			return app.alertError('[[error:cant-chat-with-yourself]]');
+		}
+
+		socket.emit('modules.chats.newRoom', { touid: touid }, function (err, roomId) {
+			if (err) {
+				return app.alertError(err.message);
+			}
+
+			if (!ajaxify.data.template.chats) {
+				app.openChat(roomId);
+			} else {
+				ajaxify.go('chats/' + roomId);
+			}
+
+			callback(false, roomId);
+		});
+	};
+
 	var	titleObj = {
-			active: false,
-			interval: undefined,
-			titles: []
-		};
+		active: false,
+		interval: undefined,
+		titles: [],
+	};
 
 	app.alternatingTitle = function (title) {
 		if (typeof title !== 'string') {
@@ -282,14 +380,14 @@ app.cacheBuster = null;
 				titleObj.titles[0] = window.document.title;
 			}
 
-			require(['translator'], function(translator) {
-				translator.translate(title, function(translated) {
+			require(['translator'], function (translator) {
+				translator.translate(title, function (translated) {
 					titleObj.titles[1] = translated;
 					if (titleObj.interval) {
 						clearInterval(titleObj.interval);
 					}
 
-					titleObj.interval = setInterval(function() {
+					titleObj.interval = setInterval(function () {
 						var title = titleObj.titles[titleObj.titles.indexOf(window.document.title) ^ 1];
 						if (title) {
 							window.document.title = $('<div/>').html(title).text();
@@ -307,23 +405,26 @@ app.cacheBuster = null;
 		}
 	};
 
-	app.refreshTitle = function(title) {
+	app.refreshTitle = function (title) {
 		if (!title) {
 			return;
 		}
-		require(['translator'], function(translator) {
-			title = config.titleLayout.replace(/&#123;/g, '{').replace(/&#125;/g, '}').replace('{pageTitle}', title).replace('{browserTitle}', config.browserTitle);
-			translator.translate(title, function(translated) {
+		require(['translator'], function (translator) {
+			title = config.titleLayout.replace(/&#123;/g, '{').replace(/&#125;/g, '}')
+				.replace('{pageTitle}', function () { return title; })
+				.replace('{browserTitle}', function () { return config.browserTitle; });
+
+			translator.translate(title, function (translated) {
 				titleObj.titles[0] = translated;
 				app.alternatingTitle('');
 			});
 		});
 	};
 
-	app.toggleNavbar = function(state) {
+	app.toggleNavbar = function (state) {
 		var navbarEl = $('.navbar');
 		if (navbarEl) {
-			navbarEl.toggleClass('hidden', !!!state);
+			navbarEl.toggleClass('hidden', !state);
 		}
 	};
 
@@ -332,11 +433,12 @@ app.cacheBuster = null;
 		if (env === 'xs' || env === 'sm') {
 			return;
 		}
-		$('#header-menu li a[title]').each(function() {
+		$('#header-menu li a[title]').each(function () {
 			if (!utils.isTouchDevice()) {
 				$(this).tooltip({
 					placement: 'bottom',
-					title: $(this).attr('title')
+					trigger: 'hover',
+					title: $(this).attr('title'),
 				});
 			}
 		});
@@ -344,40 +446,42 @@ app.cacheBuster = null;
 		if (!utils.isTouchDevice()) {
 			$('#search-form').parent().tooltip({
 				placement: 'bottom',
-				title: $('#search-button i').attr('title')
+				trigger: 'hover',
+				title: $('#search-button i').attr('title'),
 			});
 		}
 
 		if (!utils.isTouchDevice()) {
 			$('#user_dropdown').tooltip({
 				placement: 'bottom',
-				title: $('#user_dropdown').attr('title')
+				trigger: 'hover',
+				title: $('#user_dropdown').attr('title'),
 			});
 		}
 	}
 
 	app.handleSearch = function () {
-		var searchButton = $("#search-button"),
-			searchFields = $("#search-fields"),
-			searchInput = $('#search-fields input');
+		var searchButton = $('#search-button');
+		var searchFields = $('#search-fields');
+		var searchInput = $('#search-fields input');
 
-		$('#search-form .advanced-search-link').on('mousedown', function() {
+		$('#search-form .advanced-search-link').on('mousedown', function () {
 			ajaxify.go('/search');
 		});
 
 		$('#search-form').on('submit', dismissSearch);
 		searchInput.on('blur', dismissSearch);
 
-		function dismissSearch(){
+		function dismissSearch() {
 			searchFields.addClass('hidden');
 			searchButton.removeClass('hidden');
 		}
 
-		searchButton.on('click', function(e) {
+		searchButton.on('click', function (e) {
 			if (!config.loggedIn && !config.allowGuestSearching) {
 				app.alert({
-					message:'[[error:search-requires-login]]',
-					timeout: 3000
+					message: '[[error:search-requires-login]]',
+					timeout: 3000,
 				});
 				ajaxify.go('login');
 				return false;
@@ -390,8 +494,10 @@ app.cacheBuster = null;
 
 		$('#search-form').on('submit', function () {
 			var input = $(this).find('input');
-			require(['search'], function(search) {
-				search.query({term: input.val()}, function() {
+			require(['search'], function (search) {
+				var data = search.getSearchPreferences();
+				data.term = input.val();
+				search.query(data, function () {
 					input.val('');
 				});
 			});
@@ -399,17 +505,17 @@ app.cacheBuster = null;
 		});
 	};
 
-	app.prepareSearch = function() {
-		$("#search-fields").removeClass('hidden');
-		$("#search-button").addClass('hidden');
+	app.prepareSearch = function () {
+		$('#search-fields').removeClass('hidden');
+		$('#search-button').addClass('hidden');
 		$('#search-fields input').focus();
 	};
 
 	function handleStatusChange() {
-		$('[component="header/usercontrol"] [data-status]').off('click').on('click', function(e) {
+		$('[component="header/usercontrol"] [data-status]').off('click').on('click', function (e) {
 			var status = $(this).attr('data-status');
-			socket.emit('user.setStatus', status, function(err, data) {
-				if(err) {
+			socket.emit('user.setStatus', status, function (err) {
+				if (err) {
 					return app.alertError(err.message);
 				}
 				$('[data-uid="' + app.user.uid + '"] [component="user/status"], [component="header/profilelink"] [component="user/status"]')
@@ -422,13 +528,13 @@ app.cacheBuster = null;
 		});
 	}
 
-	app.updateUserStatus = function(el, status) {
+	app.updateUserStatus = function (el, status) {
 		if (!el.length) {
 			return;
 		}
 
-		require(['translator'], function(translator) {
-			translator.translate('[[global:' + status + ']]', function(translated) {
+		require(['translator'], function (translator) {
+			translator.translate('[[global:' + status + ']]', function (translated) {
 				el.removeClass('online offline dnd away')
 					.addClass(status)
 					.attr('title', translated)
@@ -437,87 +543,118 @@ app.cacheBuster = null;
 		});
 	};
 
-	function handleNewTopic() {
-		$('#content').on('click', '#new_topic', function() {
-			var cid = ajaxify.data.cid;
-			if (cid) {
-				$(window).trigger('action:composer.topic.new', {
-					cid: cid
-				});
-			} else {
-				socket.emit('categories.getCategoriesByPrivilege', 'topics:create', function(err, categories) {
-					if (err) {
-						return app.alertError(err.message);
-					}
-					categories = categories.filter(function(category) {
-						return !category.link && !parseInt(category.parentCid, 10);
-					});
-					if (categories.length) {
-						$(window).trigger('action:composer.topic.new', {
-							cid: categories[0].cid
-						});
-					}
-				});
-			}
+	app.newTopic = function (cid, tags) {
+		$(window).trigger('action:composer.topic.new', {
+			cid: cid || ajaxify.data.cid || 0,
+			tags: tags || (ajaxify.data.tag ? [ajaxify.data.tag] : []),
 		});
-	}
+	};
 
-	app.loadJQueryUI = function(callback) {
+	app.loadJQueryUI = function (callback) {
 		if (typeof $().autocomplete === 'function') {
 			return callback();
 		}
 
-		$.getScript(config.relative_path + '/vendor/jquery/js/jquery-ui-1.10.4.custom.js', callback);
+		var scriptEl = document.createElement('script');
+		scriptEl.type = 'text/javascript';
+		scriptEl.src = config.relative_path + '/assets/vendor/jquery/js/jquery-ui.js?' + config['cache-buster'];
+		scriptEl.onload = callback;
+		document.head.appendChild(scriptEl);
 	};
 
-	app.showEmailConfirmWarning = function(err) {
+	app.showEmailConfirmWarning = function (err) {
 		if (!config.requireEmailConfirmation || !app.user.uid) {
 			return;
 		}
+		var msg = {
+			alert_id: 'email_confirm',
+			type: 'warning',
+			timeout: 0,
+		};
+
 		if (!app.user.email) {
-			app.alert({
-				alert_id: 'email_confirm',
-				message: '[[error:no-email-to-confirm]]',
-				type: 'warning',
-				timeout: 0,
-				clickfn: function() {
-					app.removeAlert('email_confirm');
-					ajaxify.go('user/' + app.user.userslug + '/edit');
-				}
-			});
-		} else if (!app.user['email:confirmed']) {
-			app.alert({
-				alert_id: 'email_confirm',
-				message: err ? err.message : '[[error:email-not-confirmed]]',
-				type: 'warning',
-				timeout: 0,
-				clickfn: function() {
-					app.removeAlert('email_confirm');
-					socket.emit('user.emailConfirm', {}, function(err) {
-						if (err) {
-							return app.alertError(err.message);
-						}
-						app.alertSuccess('[[notifications:email-confirm-sent]]');
-					});
-				}
-			});
+			msg.message = '[[error:no-email-to-confirm]]';
+			msg.clickfn = function () {
+				app.removeAlert('email_confirm');
+				ajaxify.go('user/' + app.user.userslug + '/edit');
+			};
+			app.alert(msg);
+		} else if (!app.user['email:confirmed'] && !app.user.isEmailConfirmSent) {
+			msg.message = err ? err.message : '[[error:email-not-confirmed]]';
+			msg.clickfn = function () {
+				app.removeAlert('email_confirm');
+				socket.emit('user.emailConfirm', {}, function (err) {
+					if (err) {
+						return app.alertError(err.message);
+					}
+					app.alertSuccess('[[notifications:email-confirm-sent]]');
+				});
+			};
+
+			app.alert(msg);
+		} else if (!app.user['email:confirmed'] && app.user.isEmailConfirmSent) {
+			msg.message = '[[error:email-not-confirmed-email-sent]]';
+			app.alert(msg);
 		}
 	};
 
-	app.parseAndTranslate = function(template, blockName, data, callback) {
-		if (typeof blockName === 'string') {
-			templates.parse(template, blockName, data, function(html) {
-				translator.translate(html, function(translatedHTML) {
+	app.parseAndTranslate = function (template, blockName, data, callback) {
+		require(['translator'], function (translator) {
+			function translate(html, callback) {
+				translator.translate(html, function (translatedHTML) {
+					translatedHTML = translator.unescape(translatedHTML);
 					callback($(translatedHTML));
 				});
-			});
-		} else {
-			callback = data, data = blockName;
-			templates.parse(template, data, function(html) {
-				translator.translate(html, function(translatedHTML) {
-					callback($(translatedHTML));
+			}
+
+			if (typeof blockName === 'string') {
+				templates.parse(template, blockName, data, function (html) {
+					translate(html, callback);
 				});
-			});
+			} else {
+				callback = data;
+				data = blockName;
+				templates.parse(template, data, function (html) {
+					translate(html, callback);
+				});
+			}
+		});
+	};
+
+	app.loadProgressiveStylesheet = function () {
+		var linkEl = document.createElement('link');
+		linkEl.rel = 'stylesheet';
+		linkEl.href = config.relative_path + '/assets/js-enabled.css';
+
+		document.head.appendChild(linkEl);
+	};
+
+	app.showCookieWarning = function () {
+		if (!config.cookies.enabled || !navigator.cookieEnabled) {
+			// Skip warning if cookie consent subsystem disabled (obviously), or cookies not in use
+			return;
+		} else if (window.location.pathname.startsWith(config.relative_path + '/admin')) {
+			// No need to show cookie consent warning in ACP
+			return;
+		} else if (window.localStorage.getItem('cookieconsent') === '1') {
+			return;
 		}
+		require(['translator'], function (translator) {
+			config.cookies.message = translator.unescape(config.cookies.message);
+			config.cookies.dismiss = translator.unescape(config.cookies.dismiss);
+			config.cookies.link = translator.unescape(config.cookies.link);
+
+			app.parseAndTranslate('partials/cookie-consent', config.cookies, function (html) {
+				$(document.body).append(html);
+
+				var warningEl = $('.cookie-consent');
+				var dismissEl = warningEl.find('button');
+				dismissEl.on('click', function () {
+					// Save consent cookie and remove warning element
+					window.localStorage.setItem('cookieconsent', '1');
+					warningEl.remove();
+				});
+			});
+		});
 	};
 }());

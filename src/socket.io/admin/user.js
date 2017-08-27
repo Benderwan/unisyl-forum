@@ -1,45 +1,46 @@
-"use strict";
+'use strict';
 
+var async = require('async');
+var validator = require('validator');
 
-var async = require('async'),
-	db = require('../../database'),
-	groups = require('../../groups'),
-	user = require('../../user'),
-	events = require('../../events'),
-	meta = require('../../meta'),
-	websockets = require('../index'),
-	User = {};
+var db = require('../../database');
+var groups = require('../../groups');
+var user = require('../../user');
+var events = require('../../events');
+var meta = require('../../meta');
+var plugins = require('../../plugins');
 
+var User = {};
 
-User.makeAdmins = function(socket, uids, callback) {
-	if(!Array.isArray(uids)) {
+User.makeAdmins = function (socket, uids, callback) {
+	if (!Array.isArray(uids)) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 
-	user.getUsersFields(uids, ['banned'], function(err, userData) {
+	user.getUsersFields(uids, ['banned'], function (err, userData) {
 		if (err) {
 			return callback(err);
 		}
 
-		for(var i=0; i<userData.length; i++) {
+		for (var i = 0; i < userData.length; i += 1) {
 			if (userData[i] && parseInt(userData[i].banned, 10) === 1) {
 				return callback(new Error('[[error:cant-make-banned-users-admin]]'));
 			}
 		}
 
-		async.each(uids, function(uid, next) {
+		async.each(uids, function (uid, next) {
 			groups.join('administrators', uid, next);
 		}, callback);
 	});
 };
 
-User.removeAdmins = function(socket, uids, callback) {
-	if(!Array.isArray(uids)) {
+User.removeAdmins = function (socket, uids, callback) {
+	if (!Array.isArray(uids)) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 
-	async.eachSeries(uids, function(uid, next) {
-		groups.getMemberCount('administrators', function(err, count) {
+	async.eachSeries(uids, function (uid, next) {
+		groups.getMemberCount('administrators', function (err, count) {
 			if (err) {
 				return next(err);
 			}
@@ -53,47 +54,14 @@ User.removeAdmins = function(socket, uids, callback) {
 	}, callback);
 };
 
-User.createUser = function(socket, userData, callback) {
+User.createUser = function (socket, userData, callback) {
 	if (!userData) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 	user.create(userData, callback);
 };
 
-User.banUsers = function(socket, uids, callback) {
-	toggleBan(uids, User.banUser, callback);
-};
-
-User.unbanUsers = function(socket, uids, callback) {
-	toggleBan(uids, user.unban, callback);
-};
-
-function toggleBan(uids, method, callback) {
-	if(!Array.isArray(uids)) {
-		return callback(new Error('[[error:invalid-data]]'));
-	}
-	async.each(uids, method, callback);
-}
-
-User.banUser = function(uid, callback) {
-	user.isAdministrator(uid, function(err, isAdmin) {
-		if (err || isAdmin) {
-			return callback(err || new Error('[[error:cant-ban-other-admins]]'));
-		}
-
-		user.ban(uid, function(err) {
-			if (err) {
-				return callback(err);
-			}
-
-			websockets.in('uid_' + uid).emit('event:banned');
-
-			callback();
-		});
-	});
-};
-
-User.resetLockouts = function(socket, uids, callback) {
+User.resetLockouts = function (socket, uids, callback) {
 	if (!Array.isArray(uids)) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
@@ -101,7 +69,7 @@ User.resetLockouts = function(socket, uids, callback) {
 	async.each(uids, user.auth.resetLockout, callback);
 };
 
-User.resetFlags = function(socket, uids, callback) {
+User.resetFlags = function (socket, uids, callback) {
 	if (!Array.isArray(uids)) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
@@ -109,21 +77,26 @@ User.resetFlags = function(socket, uids, callback) {
 	user.resetFlags(uids, callback);
 };
 
-User.validateEmail = function(socket, uids, callback) {
+User.validateEmail = function (socket, uids, callback) {
 	if (!Array.isArray(uids)) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 
-	uids = uids.filter(function(uid) {
+	uids = uids.filter(function (uid) {
 		return parseInt(uid, 10);
 	});
 
-	async.each(uids, function(uid, next) {
+	async.each(uids, function (uid, next) {
 		user.setUserField(uid, 'email:confirmed', 1, next);
-	}, callback);
+	}, function (err) {
+		if (err) {
+			return callback(err);
+		}
+		db.sortedSetRemove('users:notvalidated', uids, callback);
+	});
 };
 
-User.sendValidationEmail = function(socket, uids, callback) {
+User.sendValidationEmail = function (socket, uids, callback) {
 	if (!Array.isArray(uids)) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
@@ -132,32 +105,33 @@ User.sendValidationEmail = function(socket, uids, callback) {
 		return callback(new Error('[[error:email-confirmations-are-disabled]]'));
 	}
 
-	user.getUsersFields(uids, ['uid', 'email'], function(err, usersData) {
-		if (err) {
-			return callback(err);
-		}
-
-		async.eachLimit(usersData, 50, function(userData, next) {
-			if (userData.email && userData.uid) {
-				user.email.sendValidationEmail(userData.uid, userData.email, next);
-			} else {
-				next();
-			}
-		}, callback);
-	});
+	async.waterfall([
+		function (next) {
+			user.getUsersFields(uids, ['uid', 'email'], next);
+		},
+		function (usersData, next) {
+			async.eachLimit(usersData, 50, function (userData, next) {
+				if (userData.email && userData.uid) {
+					user.email.sendValidationEmail(userData.uid, userData.email, next);
+				} else {
+					next();
+				}
+			}, next);
+		},
+	], callback);
 };
 
-User.sendPasswordResetEmail = function(socket, uids, callback) {
+User.sendPasswordResetEmail = function (socket, uids, callback) {
 	if (!Array.isArray(uids)) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 
-	uids = uids.filter(function(uid) {
+	uids = uids.filter(function (uid) {
 		return parseInt(uid, 10);
 	});
 
-	async.each(uids, function(uid, next) {
-		user.getUserFields(uid, ['email', 'username'], function(err, userData) {
+	async.each(uids, function (uid, next) {
+		user.getUserFields(uid, ['email', 'username'], function (err, userData) {
 			if (err) {
 				return next(err);
 			}
@@ -169,83 +143,127 @@ User.sendPasswordResetEmail = function(socket, uids, callback) {
 	}, callback);
 };
 
-User.deleteUsers = function(socket, uids, callback) {
-	if(!Array.isArray(uids)) {
+User.deleteUsers = function (socket, uids, callback) {
+	deleteUsers(socket, uids, function (uid, next) {
+		user.deleteAccount(uid, next);
+	}, callback);
+};
+
+User.deleteUsersAndContent = function (socket, uids, callback) {
+	deleteUsers(socket, uids, function (uid, next) {
+		user.delete(socket.uid, uid, next);
+	}, callback);
+};
+
+function deleteUsers(socket, uids, method, callback) {
+	if (!Array.isArray(uids)) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 
-	async.each(uids, function(uid, next) {
-		user.isAdministrator(uid, function(err, isAdmin) {
-			if (err || isAdmin) {
-				return callback(err || new Error('[[error:cant-delete-other-admins]]'));
-			}
-
-			user.delete(uid, function(err) {
-				if (err) {
-					return next(err);
+	async.each(uids, function (uid, next) {
+		async.waterfall([
+			function (next) {
+				user.isAdministrator(uid, next);
+			},
+			function (isAdmin, next) {
+				if (isAdmin) {
+					return next(new Error('[[error:cant-delete-other-admins]]'));
 				}
 
+				method(uid, next);
+			},
+			function (next) {
 				events.log({
 					type: 'user-delete',
 					uid: socket.uid,
 					targetUid: uid,
-					ip: socket.ip
-				});
-
-				next();
-			});
-		});
-	}, callback);
-};
-
-User.search = function(socket, data, callback) {
-	user.search({query: data.query, searchBy: data.searchBy, uid: socket.uid}, function(err, searchData) {
-		if (err) {
-			return callback(err);
-		}
-		if (!searchData.users.length) {
-			return callback(null, searchData);
-		}
-
-		var userData = searchData.users;
-		var uids = userData.map(function(user) {
-			return user && user.uid;
-		});
-
-		async.parallel({
-			users: function(next) {
-				user.getUsersFields(uids, ['email'], next);
+					ip: socket.ip,
+				}, next);
 			},
-			flagCounts: function(next) {
-				var sets = uids.map(function(uid) {
-					return 'uid:' + uid + ':flagged_by';
+			function (next) {
+				plugins.fireHook('action:user.delete', {
+					callerUid: socket.uid,
+					uid: uid,
+					ip: socket.ip,
 				});
-				db.setsCount(sets, next);
-			}
-		}, function(err, results) {
-			if (err) {
-				return callback(err);
+				next();
+			},
+		], next);
+	}, callback);
+}
+
+User.search = function (socket, data, callback) {
+	var searchData;
+	async.waterfall([
+		function (next) {
+			user.search({ query: data.query, searchBy: data.searchBy, uid: socket.uid }, next);
+		},
+		function (_searchData, next) {
+			searchData = _searchData;
+			if (!searchData.users.length) {
+				return callback(null, searchData);
 			}
 
-			userData.forEach(function(user, index) {
-				if (user) {
-					user.email = (results.users[index] && results.users[index].email) || '';
-					user.flags = results.flagCounts[index] || 0;
+			var uids = searchData.users.map(function (user) {
+				return user && user.uid;
+			});
+
+			user.getUsersFields(uids, ['email', 'flags', 'lastonline', 'joindate'], next);
+		},
+		function (userInfo, next) {
+			searchData.users.forEach(function (user, index) {
+				if (user && userInfo[index]) {
+					user.email = validator.escape(String(userInfo[index].email || ''));
+					user.flags = userInfo[index].flags || 0;
+					user.lastonlineISO = userInfo[index].lastonlineISO;
+					user.joindateISO = userInfo[index].joindateISO;
 				}
 			});
-
-			callback(null, searchData);
-		});
-	});
+			next(null, searchData);
+		},
+	], callback);
 };
 
-User.acceptRegistration = function(socket, data, callback) {
-	user.acceptRegistration(data.username, callback);
+User.deleteInvitation = function (socket, data, callback) {
+	user.deleteInvitation(data.invitedBy, data.email, callback);
 };
 
-User.rejectRegistration = function(socket, data, callback) {
-	user.rejectRegistration(data.username, callback);
+User.acceptRegistration = function (socket, data, callback) {
+	async.waterfall([
+		function (next) {
+			user.acceptRegistration(data.username, next);
+		},
+		function (uid, next) {
+			events.log({
+				type: 'registration-approved',
+				uid: socket.uid,
+				ip: socket.ip,
+				targetUid: uid,
+			});
+			next(null, uid);
+		},
+	], callback);
 };
 
+User.rejectRegistration = function (socket, data, callback) {
+	async.waterfall([
+		function (next) {
+			user.rejectRegistration(data.username, next);
+		},
+		function (next) {
+			events.log({
+				type: 'registration-rejected',
+				uid: socket.uid,
+				ip: socket.ip,
+				username: data.username,
+			});
+			next();
+		},
+	], callback);
+};
+
+User.restartJobs = function (socket, data, callback) {
+	user.startJobs(callback);
+};
 
 module.exports = User;
